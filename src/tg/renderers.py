@@ -21,14 +21,37 @@ def render_post_html(post_id: str, version: int, post: Dict[str, Any]) -> str:
     qa = post.get("qa") or []
     qa_lines = "\n".join([f"• {_e(x)}" for x in qa]) if qa else "• (sin checklist)"
 
-    selected = post.get("radar_selected_candidate_id")
+    selected = post.get("radar_selected_candidate_id") or post.get("radar_winner_candidate_id")
+    selected_preview = post.get("radar_selected_preview") or post.get("radar_winner_preview") or {}
+
     alternates = (post.get("radar_alternate_candidate_ids") or [])[:3]
-    alt_lines = "\n".join([f"{i}. <code>{_e(cid)}</code>" for i, cid in enumerate(alternates, start=1)])
+    alt_previews = (post.get("radar_alternate_previews") or [])[:3]
+
+    if alt_previews:
+        lines = []
+        for i, p in enumerate(alt_previews, start=1):
+            title = _e(p.get("title") or p.get("candidate_id") or "(sin título)")
+            author = _e(p.get("author") or "unknown")
+            score = p.get("score")
+            score_txt = f" · score {_e(score)}" if score is not None else ""
+            lines.append(f"{i}. @{author}: {title}{score_txt}")
+        alt_lines = "\n".join(lines)
+    else:
+        alt_lines = "\n".join([f"{i}. <code>{_e(cid)}</code>" for i, cid in enumerate(alternates, start=1)])
+
+    selected_line = "N/A"
+    if selected_preview:
+        t = _e(selected_preview.get("title") or selected_preview.get("candidate_id") or selected)
+        a = _e(selected_preview.get("author") or "unknown")
+        selected_line = f"@{a}: {t}"
+    elif selected:
+        selected_line = f"<code>{_e(selected)}</code>"
+
     radar_block = ""
-    if selected or alternates:
+    if selected or alternates or alt_previews:
         radar_block = (
             f"\n\n🛰 <b>Radar (Top no ganador)</b>\n"
-            f"Seleccionado: <code>{_e(selected or 'N/A')}</code>\n"
+            f"Seleccionado: {selected_line}\n"
             f"Alternos:\n{alt_lines or '1. (sin alternos)'}\n"
             f"<i>Nota: los botones de alternos regeneran una nueva versión desde ese candidato.</i>"
         )
