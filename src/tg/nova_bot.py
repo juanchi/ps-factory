@@ -336,6 +336,27 @@ async def cmd_demo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("Listo ✅ Mandé un post demo a PS | Drafts.", parse_mode=ParseMode.HTML)
 
 
+def _candidate_preview(candidate: dict) -> dict:
+    """Resumen corto legible para mostrar alternos en Draft."""
+    try:
+        evidence = json.loads(candidate.get("evidence_json") or "{}")
+    except Exception:
+        evidence = {}
+
+    tw = evidence.get("tweet", {}) or {}
+    author = (tw.get("author") or {}).get("username") or "unknown"
+    text = (tw.get("text") or candidate.get("title") or "").strip().replace("\n", " ")
+    if len(text) > 110:
+        text = text[:109].rstrip() + "…"
+
+    return {
+        "candidate_id": candidate.get("candidate_id"),
+        "author": author,
+        "title": text,
+        "score": round(float(candidate.get("total_score") or 0), 3),
+    }
+
+
 async def _prompt_from_candidate(candidate: dict) -> str:
     evidence = json.loads(candidate["evidence_json"])
     tw = evidence.get("tweet", {})
@@ -410,9 +431,12 @@ async def cmd_radar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     post["post_id"] = post_id
     post["topic"] = str(post.get("topic") or "Radar X (Top)")
     post["radar_winner_candidate_id"] = winner_id
+    post["radar_selected_candidate_id"] = winner_id
 
     alt_ids = [a["candidate_id"] for a in alternates]
     post["radar_alternate_candidate_ids"] = alt_ids
+    post["radar_winner_preview"] = _candidate_preview(winner)
+    post["radar_alternate_previews"] = [_candidate_preview(a) for a in alternates]
 
     drafts_chat_id = int(os.environ["TG_DRAFTS_CHAT_ID"])
 
@@ -689,6 +713,9 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             parse_mode=ParseMode.HTML,
         )
 
+        latest = await get_latest_version(post_id)
+        latest_content = (latest[1] if latest else {}) or {}
+
         latest_num = await get_latest_version_number(post_id)
         new_version = latest_num + 1
 
@@ -726,6 +753,17 @@ Responde SOLO el JSON.
 
         new_post["post_id"] = post_id
         new_post["topic"] = str(new_post.get("topic") or topic)
+
+        # Mantener contexto Radar para UX consistente en Draft
+        for k in [
+            "radar_selected_candidate_id",
+            "radar_winner_candidate_id",
+            "radar_alternate_candidate_ids",
+            "radar_winner_preview",
+            "radar_alternate_previews",
+        ]:
+            if k in latest_content:
+                new_post[k] = latest_content.get(k)
 
         await add_version(post_id, new_version, new_post)
         await log_event(post_id, "REGEN", {"version": new_version})
@@ -811,6 +849,13 @@ Responde SOLO el JSON.
         alt_post["topic"] = str(alt_post.get("topic") or post_db.get("topic") or "Radar alt")
         alt_post["radar_selected_candidate_id"] = candidate_id
         alt_post["radar_alternate_candidate_ids"] = alt_ids
+
+        # Conserva y mejora previews para que el hint sea legible
+        prev_alts = (content or {}).get("radar_alternate_previews") or []
+        alt_post["radar_alternate_previews"] = prev_alts
+        alt_post["radar_winner_candidate_id"] = (content or {}).get("radar_winner_candidate_id")
+        alt_post["radar_winner_preview"] = (content or {}).get("radar_winner_preview")
+        alt_post["radar_selected_preview"] = _candidate_preview(cand)
 
         await add_version(post_id, new_version, alt_post)
         await log_event(post_id, "ALT_GEN", {"version": new_version, "candidate_id": candidate_id, "pick": pick})
