@@ -29,7 +29,7 @@ def build_post_keyboard(post_id: str, candidate_ids: Optional[List[str]] = None)
     for i, _cid in enumerate(candidate_ids[:3], start=1):
         cb = f"GEN:{post_id}:{i}"
         if _fits_callback_data(cb):
-            rows.append([InlineKeyboardButton("⚡️ Generar alterno (Radar)", callback_data=cb)])
+            rows.append([InlineKeyboardButton(f"⚡️ Regenerar desde alterno #{i}", callback_data=cb)])
 
     versions_cb = f"VERSIONS:{post_id}"
     if _fits_callback_data(versions_cb):
