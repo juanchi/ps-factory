@@ -537,10 +537,49 @@ async def cmd_intraday_now(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     last_result = await kv_get("intraday:last_result")
     last_ts = await kv_get("intraday:last_run_ts")
+    last_detail_raw = await kv_get("intraday:last_detail")
+
+    detail = {}
+    try:
+        detail = json.loads(last_detail_raw or "{}")
+    except Exception:
+        detail = {}
+
+    reason_map = {
+        "skip_low_score": "score por debajo del umbral",
+        "skip_low_relevance": "relevancia baja",
+        "skip_high_risk": "riesgo alto",
+        "skip_missing_link": "sin enlace de soporte",
+        "skip_cooldown": "en cooldown",
+        "skip_stale": "candidato desactualizado",
+        "skip_cap_reached": "límite diario de alertas alcanzado",
+        "alerted": "alerta enviada a OPS",
+    }
+    human_reason = reason_map.get((last_result or "").strip(), (last_result or "unknown"))
+
+    score = detail.get("score")
+    relevance = detail.get("relevance")
+    risk = detail.get("risk")
+    has_url = detail.get("has_url")
+    title = (detail.get("title") or "")[:140]
+
+    extra = ""
+    if title:
+        extra += f"\n<b>title:</b> {_e(title)}"
+    if score is not None:
+        extra += f"\n<b>score:</b> <code>{score}</code>"
+    if relevance is not None:
+        extra += f"\n<b>relevance:</b> <code>{relevance}</code>"
+    if risk is not None:
+        extra += f"\n<b>risk:</b> <code>{risk}</code>"
+    if has_url is not None:
+        extra += f"\n<b>has_link:</b> <code>{'yes' if has_url else 'no'}</code>"
+
     await update.message.reply_text(
         "✅ Intraday monitor ejecutado.\n\n"
-        f"<b>last_result:</b> <code>{(last_result or 'unknown')[:120]}</code>\n"
-        f"<b>last_run_ts:</b> <code>{(last_ts or 'n/a')[:40]}</code>",
+        f"<b>resultado:</b> <code>{_e(human_reason)}</code>\n"
+        f"<b>ts:</b> <code>{(last_ts or 'n/a')[:40]}</code>"
+        f"{extra}",
         parse_mode=ParseMode.HTML,
     )
 
