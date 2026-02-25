@@ -413,6 +413,18 @@ async def cmd_radar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     winner_id = winner["candidate_id"]
+    winner_score = float(winner.get("total_score") or 0.0)
+    min_score = float(os.getenv("RADAR_MIN_SCORE", "0.55"))
+    if winner_score < min_score:
+        await update.message.reply_text(
+            "🟡 Radar ejecutado, pero no se generó Draft por umbral editorial.\n\n"
+            f"<b>run_id:</b> <code>{run_id}</code>\n"
+            f"<b>winner_score:</b> <code>{winner_score:.3f}</code>\n"
+            f"<b>min_score:</b> <code>{min_score:.3f}</code>",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
     prompt = await _prompt_from_candidate(winner)
     raw = openclaw_chat(prompt)
 

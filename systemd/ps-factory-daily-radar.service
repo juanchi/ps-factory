@@ -1,0 +1,20 @@
+[Unit]
+Description=PS Factory Daily Radar Run
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/ps_factory
+Environment=PYTHONPATH=/opt/ps_factory/src
+ExecStart=/opt/ps_factory/venv/bin/python -m scheduler.daily_radar_run
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/ps_factory/var /opt/ps_factory/logs /opt/ps_factory/outputs /opt/ps_factory/config
+
+[Install]
+WantedBy=multi-user.target
