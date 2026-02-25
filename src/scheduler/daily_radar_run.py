@@ -55,6 +55,24 @@ async def _mark_observability(*, result: str, winner_score: float | None = None,
         await kv_set("obs:daily_radar_last_detail", detail[:500])
 
 
+def _ops_message(*, level: str, title: str, run_id: str | None = None, post_id: str | None = None, winner_score: float | None = None, min_score: float | None = None, reason: str | None = None, detail: str | None = None) -> str:
+    icon = {"ok": "✅", "skip": "🟡", "error": "🔴", "info": "ℹ️"}.get(level, "ℹ️")
+    lines = [f"{icon} <b>{title}</b>"]
+    if run_id:
+        lines.append(f"<b>run_id:</b> <code>{run_id}</code>")
+    if post_id:
+        lines.append(f"<b>post_id:</b> <code>{post_id}</code>")
+    if winner_score is not None:
+        lines.append(f"<b>winner_score:</b> <code>{winner_score:.3f}</code>")
+    if min_score is not None:
+        lines.append(f"<b>min_score:</b> <code>{min_score:.3f}</code>")
+    if reason:
+        lines.append(f"<b>reason:</b> <code>{reason}</code>")
+    if detail:
+        lines.append(f"<b>detail:</b> <code>{detail[:180]}</code>")
+    return "\n".join(lines)
+
+
 async def _notify_once_per_day(*, bot: Bot, ops_chat_id: int, day: str, reason: str, text: str) -> None:
     if not ops_chat_id:
         return
@@ -87,7 +105,7 @@ async def run_daily() -> int:
             ops_chat_id=ops_chat_id,
             day=today,
             reason="already_published",
-            text=f"ℹ️ Daily radar ya publicado hoy. post_id=<code>{post_id}</code>",
+            text=_ops_message(level="info", title="Daily radar ya publicado hoy", post_id=post_id, reason="already_published"),
         )
         await kv_set(today_key, str(existing.get('draft_message_id')))
         await _mark_observability(result="skip", detail="already_published")
@@ -107,7 +125,7 @@ async def run_daily() -> int:
                 ops_chat_id=ops_chat_id,
                 day=today,
                 reason="lock_recent",
-                text=f"ℹ️ Daily radar en ejecución o recién corrido. lock=<code>{lock_key}</code>",
+                text=_ops_message(level="info", title="Daily radar en ejecución o recién corrido", reason="lock_recent", detail=lock_key),
             )
             await _mark_observability(result="skip", detail="lock_recent")
             return 0
@@ -122,7 +140,7 @@ async def run_daily() -> int:
                 ops_chat_id=ops_chat_id,
                 day=today,
                 reason="already_marked",
-                text=f"ℹ️ Daily radar ya ejecutado hoy. key=<code>{today_key}</code>",
+                text=_ops_message(level="info", title="Daily radar ya ejecutado hoy", reason="already_marked", detail=today_key),
             )
             await _mark_observability(result="skip", detail="already_marked")
             return 0
@@ -138,10 +156,14 @@ async def run_daily() -> int:
             await _notify(
                 bot,
                 ops_chat_id,
-                "🟡 Daily radar ejecutado, skip por umbral editorial.\n\n"
-                f"<b>run_id:</b> <code>{run_id}</code>\n"
-                f"<b>winner_score:</b> <code>{winner_score:.3f}</code>\n"
-                f"<b>min_score:</b> <code>{min_score:.3f}</code>",
+                _ops_message(
+                    level="skip",
+                    title="Daily radar skip por umbral editorial",
+                    run_id=run_id,
+                    winner_score=winner_score,
+                    min_score=min_score,
+                    reason="below_threshold",
+                ),
             )
             print(json.dumps({
                 "component": "daily_radar",
@@ -192,10 +214,13 @@ async def run_daily() -> int:
         await _notify(
             bot,
             ops_chat_id,
-            "✅ Daily radar enviado a Drafts.\n\n"
-            f"<b>run_id:</b> <code>{run_id}</code>\n"
-            f"<b>post_id:</b> <code>{post_id}</code>\n"
-            f"<b>winner_score:</b> <code>{winner_score:.3f}</code>",
+            _ops_message(
+                level="ok",
+                title="Daily radar enviado a Drafts",
+                run_id=run_id,
+                post_id=post_id,
+                winner_score=winner_score,
+            ),
         )
         print(json.dumps({
             "component": "daily_radar",
@@ -209,7 +234,11 @@ async def run_daily() -> int:
 
     except Exception as e:
         await _mark_observability(result="error", detail=str(e))
-        await _notify(bot, ops_chat_id, f"🔴 Daily radar error: <code>{str(e)[:300]}</code>")
+        await _notify(
+            bot,
+            ops_chat_id,
+            _ops_message(level="error", title="Daily radar error", reason="exception", detail=str(e)),
+        )
         print(json.dumps({
             "component": "daily_radar",
             "result": "error",
