@@ -1,0 +1,10 @@
+[Unit]
+Description=Run PS Factory Intraday Impact Monitor every 3 hours
+
+[Timer]
+OnCalendar=*-*-* 00/3:00:00 UTC
+Persistent=true
+Unit=ps-factory-intraday-monitor.service
+
+[Install]
+WantedBy=timers.target
