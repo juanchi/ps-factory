@@ -736,14 +736,19 @@ async def cmd_intraday_force_draft(update: Update, context: ContextTypes.DEFAULT
         "alts": alt_ids,
     })
 
+    drafts_chat_id = int(os.getenv("TG_DRAFTS_CHAT_ID", "0") or 0)
+    if not drafts_chat_id:
+        await update.message.reply_text("❌ TG_DRAFTS_CHAT_ID no está configurado.")
+        return
+
     msg = await context.bot.send_message(
-        chat_id=DRAFTS_CHAT_ID,
+        chat_id=drafts_chat_id,
         text=render_post_html(post_id, 1, post),
         parse_mode=ParseMode.HTML,
         disable_web_page_preview=True,
         reply_markup=build_post_keyboard(post_id, candidate_ids=alt_ids),
     )
-    await set_draft_message_ref(post_id, DRAFTS_CHAT_ID, msg.message_id)
+    await set_draft_message_ref(post_id, drafts_chat_id, msg.message_id)
 
     await update.message.reply_text(
         "✅ FORCE enviado a Drafts.\n\n"
