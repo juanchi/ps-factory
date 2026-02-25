@@ -2,6 +2,7 @@ import os
 import re
 import time
 import json
+import html
 import asyncio
 from difflib import SequenceMatcher
 from datetime import datetime, timezone
@@ -61,20 +62,21 @@ async def _mark_observability(*, result: str, winner_score: float | None = None,
 
 
 def _ops_message(*, level: str, title: str, run_id: str | None = None, post_id: str | None = None, winner_score: float | None = None, min_score: float | None = None, reason: str | None = None, detail: str | None = None) -> str:
+    esc = lambda x: html.escape(str(x or ""), quote=False)
     icon = {"ok": "✅", "skip": "🟡", "error": "🔴", "info": "ℹ️"}.get(level, "ℹ️")
-    lines = [f"{icon} <b>{title}</b>"]
+    lines = [f"{icon} <b>{esc(title)}</b>"]
     if run_id:
-        lines.append(f"<b>run_id:</b> <code>{run_id}</code>")
+        lines.append(f"<b>run_id:</b> <code>{esc(run_id)}</code>")
     if post_id:
-        lines.append(f"<b>post_id:</b> <code>{post_id}</code>")
+        lines.append(f"<b>post_id:</b> <code>{esc(post_id)}</code>")
     if winner_score is not None:
         lines.append(f"<b>winner_score:</b> <code>{winner_score:.3f}</code>")
     if min_score is not None:
         lines.append(f"<b>min_score:</b> <code>{min_score:.3f}</code>")
     if reason:
-        lines.append(f"<b>reason:</b> <code>{reason}</code>")
+        lines.append(f"<b>reason:</b> <code>{esc(reason)}</code>")
     if detail:
-        lines.append(f"<b>detail:</b> <code>{detail[:180]}</code>")
+        lines.append(f"<b>detail:</b> <code>{esc(detail[:180])}</code>")
     return "\n".join(lines)
 
 

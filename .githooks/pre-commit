@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Block obvious secrets in staged changes (exclude this hook file to avoid false positives)
-changed_files=$(git diff --cached --name-only | grep -v '^.githooks/pre-commit$' || true)
-if [ -n "${changed_files}" ]; then
-  if echo "${changed_files}" | xargs -r grep -nE "(OPENCLAW_GATEWAY_TOKEN|TG_BOT_TOKEN|X_BEARER_TOKEN|API_KEY|PRIVATE KEY)"; then
-    echo "❌ Possible secret detected in staged files."
+# Block likely secrets in newly added staged lines (exclude this hook file to avoid self-matches)
+# NOTE: detect credential-like assignments, not mere env var names.
+patch=$(git diff --cached -U0 -- . ':(exclude).githooks/pre-commit' || true)
+if [ -n "${patch}" ]; then
+  if echo "${patch}" | grep -nE "^\+.*(BEGIN (RSA|EC|OPENSSH|PGP) PRIVATE KEY|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})"; then
+    echo "❌ Possible secret detected in staged additions (key/token pattern)."
+    exit 1
+  fi
+
+  if echo "${patch}" | grep -nE "^\+.*(TG_BOT_TOKEN|X_BEARER_TOKEN|OPENCLAW_GATEWAY_TOKEN|GEMINI_API_KEY|API_KEY)\s*[:=]\s*['\"][^'\"]{12,}['\"]"; then
+    echo "❌ Possible secret detected: token/api key literal assignment in staged additions."
     exit 1
   fi
 fi

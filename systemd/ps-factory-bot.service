@@ -1,0 +1,24 @@
+[Unit]
+Description=PS Factory Nova Telegram Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/ps_factory
+Environment=PYTHONPATH=/opt/ps_factory/src
+EnvironmentFile=-/opt/ps_factory/config/.env
+ExecStart=/opt/ps_factory/venv/bin/python -m tg.nova_bot
+Restart=always
+RestartSec=5
+TimeoutStopSec=20
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/ps_factory/var /opt/ps_factory/logs /opt/ps_factory/outputs /opt/ps_factory/config
+
+[Install]
+WantedBy=default.target

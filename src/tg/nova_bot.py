@@ -15,6 +15,7 @@ from telegram.request import HTTPXRequest
 
 from tg.callbacks import build_post_keyboard
 from gen.openclaw_gen import openclaw_chat
+from gen.image_gen import generate_image, validate_4_5, build_image_prompt_en as _build_image_prompt_en, ImageGenError
 
 from db.sqlite_store import (
     DB_PATH,
@@ -31,6 +32,7 @@ from db.sqlite_store import (
     get_last_post_id,
     get_radar_candidate,
     kv_get,
+    kv_set,
 )
 
 from tg.renderers import render_post_html
@@ -393,6 +395,11 @@ def _quality_gate_reason(candidate: dict) -> str | None:
     return None
 
 
+def build_image_prompt_en(visual_prompt: str) -> str:
+    """Provider-ready EN prompt policy for image generation."""
+    return _build_image_prompt_en(visual_prompt)
+
+
 async def _prompt_from_candidate(candidate: dict) -> str:
     evidence = json.loads(candidate["evidence_json"])
     tw = evidence.get("tweet", {})
@@ -465,8 +472,8 @@ async def cmd_radar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if gate_reason:
         await update.message.reply_text(
             "🟡 Radar ejecutado, pero no se generó Draft por quality gate.\n\n"
-            f"<b>run_id:</b> <code>{run_id}</code>\n"
-            f"<b>reason:</b> <code>{gate_reason}</code>",
+            f"<b>run_id:</b> <code>{_e(run_id)}</code>\n"
+            f"<b>reason:</b> <code>{_e(gate_reason)}</code>",
             parse_mode=ParseMode.HTML,
         )
         return
@@ -959,15 +966,87 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         approver = query.from_user.username or query.from_user.full_name
         approved_chat_id = int(os.environ["TG_APPROVED_CHAT_ID"])
 
+        image_only_on_approve = os.getenv("IMAGE_ONLY_ON_APPROVE", "1").strip().lower() in {"1", "true", "yes", "on"}
+        image_timeout_s = int(os.getenv("IMAGE_TIMEOUT_SECONDS", "90"))
+        image_max_attempts = int(os.getenv("IMAGE_45_MAX_ATTEMPTS", "3"))
+
         latest = await get_latest_version(post_id)
         if latest:
             ver, content = latest
-            sent = await context.bot.send_message(
-                chat_id=approved_chat_id,
-                text=f"✅ <b>APROBADO</b> por: <code>{approver}</code>\n\n" + render_post_html(post_id, ver, content),
-                parse_mode=ParseMode.HTML,
-                disable_web_page_preview=True,
-            )
+
+            if image_only_on_approve:
+                visual_prompt = str((content or {}).get("visual_prompt") or "").strip()
+                if not visual_prompt:
+                    await query.message.reply_text("❌ APPROVE bloqueado: falta <code>visual_prompt</code> en el draft.", parse_mode=ParseMode.HTML)
+                    await log_event(post_id, "APPROVE_BLOCKED_IMAGE", {"by": approver, "reason": "missing_visual_prompt", "version": ver})
+                    return
+
+                await query.message.reply_text("🖼 Generando imagen 4:5 para aprobar…", parse_mode=ParseMode.HTML)
+
+                img_bytes = None
+                img_mime = None
+                provider_prompt = str((content or {}).get("visual_prompt_en") or build_image_prompt_en(visual_prompt))
+                last_reason = "unknown"
+
+                for i in range(1, image_max_attempts + 1):
+                    try:
+                        bts, mime, prompt_en = await asyncio.to_thread(
+                            generate_image,
+                            visual_prompt=visual_prompt,
+                            timeout_s=image_timeout_s,
+                        )
+                        ok45, w, h = validate_4_5(bts, mime)
+                        if ok45:
+                            img_bytes, img_mime = bts, mime
+                            provider_prompt = prompt_en or provider_prompt
+                            break
+                        last_reason = f"bad_aspect:{w}x{h}"
+                        await log_event(post_id, "IMAGE_45_RETRY", {"attempt": i, "w": w, "h": h, "mime": mime})
+                    except ImageGenError as e:
+                        last_reason = f"image_gen_error:{str(e)[:180]}"
+                        await log_event(post_id, "IMAGE_45_RETRY", {"attempt": i, "error": str(e)[:300]})
+                    except Exception as e:
+                        last_reason = f"unexpected:{str(e)[:180]}"
+                        await log_event(post_id, "IMAGE_45_RETRY", {"attempt": i, "error": str(e)[:300]})
+
+                if not img_bytes or not img_mime:
+                    await query.message.reply_text(
+                        "❌ APPROVE bloqueado: no se pudo generar imagen válida 4:5.\n"
+                        f"<b>reason:</b> <code>{_e(last_reason)}</code>",
+                        parse_mode=ParseMode.HTML,
+                    )
+                    await log_event(
+                        post_id,
+                        "APPROVE_BLOCKED_IMAGE",
+                        {"by": approver, "version": ver, "reason": last_reason, "attempts": image_max_attempts},
+                    )
+                    return
+
+                photo_msg = await context.bot.send_photo(
+                    chat_id=approved_chat_id,
+                    photo=img_bytes,
+                    caption=f"✅ <b>APROBADO</b> por: <code>{_e(approver)}</code>",
+                    parse_mode=ParseMode.HTML,
+                )
+                sent = await context.bot.send_message(
+                    chat_id=approved_chat_id,
+                    text=render_post_html(post_id, ver, content),
+                    parse_mode=ParseMode.HTML,
+                    disable_web_page_preview=True,
+                )
+                await log_event(
+                    post_id,
+                    "APPROVE_IMAGE_OK",
+                    {"by": approver, "version": ver, "mime": img_mime, "provider_prompt": provider_prompt[:500], "photo_message_id": photo_msg.message_id},
+                )
+            else:
+                sent = await context.bot.send_message(
+                    chat_id=approved_chat_id,
+                    text=f"✅ <b>APROBADO</b> por: <code>{_e(approver)}</code>\n\n" + render_post_html(post_id, ver, content),
+                    parse_mode=ParseMode.HTML,
+                    disable_web_page_preview=True,
+                )
+
             await approve_post(
                 post_id=post_id,
                 approver=approver,
@@ -979,7 +1058,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         else:
             await context.bot.send_message(
                 chat_id=approved_chat_id,
-                text=f"✅ <b>APROBADO</b> por: <code>{approver}</code>\n\n" + (query.message.text or ""),
+                text=f"✅ <b>APROBADO</b> por: <code>{_e(approver)}</code>\n\n" + (query.message.text or ""),
                 parse_mode=ParseMode.HTML,
                 disable_web_page_preview=True,
             )
