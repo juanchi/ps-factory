@@ -83,13 +83,16 @@ def generate_image_gemini(*, visual_prompt: str, timeout_s: int = 90) -> Tuple[b
 
     model = os.getenv("GEMINI_IMAGE_MODEL", "gemini-2.0-flash-preview-image-generation")
 
-    final_prompt = build_image_prompt_en(visual_prompt)
+    final_prompt = build_image_prompt_en(visual_prompt) + " Output must not be square."
 
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
     payload = {
         "contents": [{"parts": [{"text": final_prompt}]}],
         "generationConfig": {
-            "responseModalities": ["TEXT", "IMAGE"]
+            "responseModalities": ["TEXT", "IMAGE"],
+            "imageConfig": {
+                "aspectRatio": "4:5"
+            }
         }
     }
 
