@@ -103,6 +103,29 @@ def _content_signature(content: dict) -> str:
     return _norm_text(f"{topic} || {hook} || {caption} || {insight}")
 
 
+def _quality_gate_reason(candidate: dict) -> str | None:
+    try:
+        scores = json.loads(candidate.get("scores_json") or "{}")
+    except Exception:
+        scores = {}
+
+    relevance = float(scores.get("relevance") or 0.0)
+    risk = float(scores.get("risk") or 0.0)
+    has_url = bool(scores.get("has_url"))
+
+    min_rel = float(os.getenv("RADAR_MIN_RELEVANCE", "4.0"))
+    max_risk = float(os.getenv("RADAR_MAX_RISK", "4.0"))
+    require_link = os.getenv("RADAR_REQUIRE_LINK", "1").strip().lower() in {"1", "true", "yes", "on"}
+
+    if relevance < min_rel:
+        return f"relevance_below:{relevance:.2f}<{min_rel:.2f}"
+    if risk > max_risk:
+        return f"risk_above:{risk:.2f}>{max_risk:.2f}"
+    if require_link and not has_url:
+        return "missing_link"
+    return None
+
+
 async def _is_duplicate_candidate_or_semantic(post: dict, winner_id: str) -> tuple[bool, str, str | None]:
     recent_limit = int(os.getenv("DAILY_DUP_RECENT_LIMIT", "30"))
     sim_threshold = float(os.getenv("DAILY_DUP_SIM_THRESHOLD", "0.90"))
@@ -218,6 +241,30 @@ async def run_daily() -> int:
                 "run_id": run_id,
                 "winner_score": round(winner_score, 3),
                 "min_score": round(min_score, 3),
+            }, ensure_ascii=False))
+            return 0
+
+        gate_reason = _quality_gate_reason(winner)
+        if gate_reason:
+            await kv_set(today_key, f"skip:{gate_reason}")
+            await _mark_observability(result="skip", winner_score=winner_score, detail=gate_reason)
+            await _notify(
+                bot,
+                ops_chat_id,
+                _ops_message(
+                    level="skip",
+                    title="Daily radar skip por quality gate",
+                    run_id=run_id,
+                    winner_score=winner_score,
+                    reason=gate_reason,
+                ),
+            )
+            print(json.dumps({
+                "component": "daily_radar",
+                "result": "skip",
+                "run_id": run_id,
+                "winner_score": round(winner_score, 3),
+                "reason": gate_reason,
             }, ensure_ascii=False))
             return 0
 

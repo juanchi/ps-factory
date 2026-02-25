@@ -357,6 +357,36 @@ def _candidate_preview(candidate: dict) -> dict:
     }
 
 
+def _quality_gate_reason(candidate: dict) -> str | None:
+    """
+    Hard floor de calidad para Radar:
+    - score mínimo (ya existe)
+    - relevancia mínima
+    - riesgo máximo
+    - link requerido (opcional por env)
+    """
+    try:
+        scores = json.loads(candidate.get("scores_json") or "{}")
+    except Exception:
+        scores = {}
+
+    relevance = float(scores.get("relevance") or 0.0)
+    risk = float(scores.get("risk") or 0.0)
+    has_url = bool(scores.get("has_url"))
+
+    min_rel = float(os.getenv("RADAR_MIN_RELEVANCE", "4.0"))
+    max_risk = float(os.getenv("RADAR_MAX_RISK", "4.0"))
+    require_link = os.getenv("RADAR_REQUIRE_LINK", "1").strip().lower() in {"1", "true", "yes", "on"}
+
+    if relevance < min_rel:
+        return f"relevance_below:{relevance:.2f}<{min_rel:.2f}"
+    if risk > max_risk:
+        return f"risk_above:{risk:.2f}>{max_risk:.2f}"
+    if require_link and not has_url:
+        return "missing_link"
+    return None
+
+
 async def _prompt_from_candidate(candidate: dict) -> str:
     evidence = json.loads(candidate["evidence_json"])
     tw = evidence.get("tweet", {})
@@ -421,6 +451,16 @@ async def cmd_radar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             f"<b>run_id:</b> <code>{run_id}</code>\n"
             f"<b>winner_score:</b> <code>{winner_score:.3f}</code>\n"
             f"<b>min_score:</b> <code>{min_score:.3f}</code>",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    gate_reason = _quality_gate_reason(winner)
+    if gate_reason:
+        await update.message.reply_text(
+            "🟡 Radar ejecutado, pero no se generó Draft por quality gate.\n\n"
+            f"<b>run_id:</b> <code>{run_id}</code>\n"
+            f"<b>reason:</b> <code>{gate_reason}</code>",
             parse_mode=ParseMode.HTML,
         )
         return
