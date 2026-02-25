@@ -119,6 +119,9 @@ async def run_intraday_monitor() -> int:
         'relevance': round(relevance, 2),
         'risk': round(risk, 2),
         'has_url': has_url,
+        'delta_score': round(total_score - min_score, 3),
+        'delta_relevance': round(relevance - min_rel, 3),
+        'delta_risk': round(max_risk - risk, 3),
     }
 
     if total_score < min_score:
