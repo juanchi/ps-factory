@@ -571,6 +571,9 @@ async def cmd_intraday_now(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     min_relevance = detail.get("min_relevance")
     max_risk = detail.get("max_risk")
     require_link = detail.get("require_link")
+    delta_score = detail.get("delta_score")
+    delta_relevance = detail.get("delta_relevance")
+    delta_risk = detail.get("delta_risk")
 
     extra = ""
     if title:
@@ -593,11 +596,94 @@ async def cmd_intraday_now(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if require_link is not None:
         extra += f"\n<b>require_link:</b> <code>{'yes' if bool(require_link) else 'no'}</code>"
 
+    if delta_score is not None:
+        extra += f"\n<b>delta_score:</b> <code>{delta_score}</code>"
+    if delta_relevance is not None:
+        extra += f"\n<b>delta_relevance:</b> <code>{delta_relevance}</code>"
+    if delta_risk is not None:
+        extra += f"\n<b>delta_risk:</b> <code>{delta_risk}</code>"
+
+    extra += "\n\n<i>Si igual lo quieres, usa:</i> <code>/intraday_force_draft</code>"
+
     await update.message.reply_text(
         "✅ Intraday monitor ejecutado.\n\n"
         f"<b>resultado:</b> <code>{_e(human_reason)}</code>\n"
         f"<b>ts:</b> <code>{(last_ts or 'n/a')[:40]}</code>"
         f"{extra}",
+        parse_mode=ParseMode.HTML,
+    )
+
+
+async def cmd_intraday_force_draft(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    ops_chat_id = int(os.getenv("TG_OPS_CHAT_ID", "0") or 0)
+    drafts_chat_id = int(os.getenv("TG_DRAFTS_CHAT_ID", "0") or 0)
+    effective_chat = update.effective_chat.id if update.effective_chat else 0
+
+    if ops_chat_id and int(effective_chat) != ops_chat_id:
+        await update.message.reply_text("❌ Este comando solo está permitido en PS | OPS.")
+        return
+
+    candidate_id = None
+    if context.args:
+        candidate_id = (context.args[0] or "").strip()
+
+    if not candidate_id:
+        raw = await kv_get("intraday:last_detail")
+        try:
+            d = json.loads(raw or "{}")
+        except Exception:
+            d = {}
+        candidate_id = (d.get("candidate_id") or "").strip()
+
+    if not candidate_id:
+        await update.message.reply_text("❌ No tengo candidate_id reciente. Ejecuta /intraday_now primero.")
+        return
+
+    cand = await get_radar_candidate(candidate_id)
+    if not cand:
+        await update.message.reply_text(f"❌ candidate_id no encontrado: <code>{_e(candidate_id)}</code>", parse_mode=ParseMode.HTML)
+        return
+
+    await update.message.reply_text(
+        f"🛠 Forzando Draft desde intraday candidate <code>{_e(candidate_id)}</code>...",
+        parse_mode=ParseMode.HTML,
+    )
+
+    prompt = await _prompt_from_candidate(cand)
+    raw = openclaw_chat(prompt)
+
+    try:
+        post = json.loads(_extract_json(raw))
+    except Exception:
+        await update.message.reply_text("❌ El modelo no devolvió JSON válido.")
+        return
+
+    post_id = f"intraday-{_now_ts()}"
+    post["post_id"] = post_id
+    post["topic"] = str(post.get("topic") or "Intraday manual override")
+    post["radar_selected_candidate_id"] = candidate_id
+    post["radar_winner_candidate_id"] = candidate_id
+    post["radar_winner_preview"] = _candidate_preview(cand)
+    post["radar_alternate_candidate_ids"] = []
+    post["radar_alternate_previews"] = []
+
+    await create_post(post_id, post["topic"], post.get("bitcoin_anchor") or "")
+    await add_version(post_id, 1, post)
+    await log_event(post_id, "INTRADAY_FORCE_DRAFT", {"candidate_id": candidate_id})
+
+    msg = await context.bot.send_message(
+        chat_id=drafts_chat_id,
+        text=render_post_html(post_id, 1, post),
+        parse_mode=ParseMode.HTML,
+        disable_web_page_preview=True,
+        reply_markup=build_post_keyboard(post_id, candidate_ids=[]),
+    )
+    await set_draft_message_ref(post_id, drafts_chat_id, msg.message_id)
+
+    await update.message.reply_text(
+        "✅ Draft forzado enviado a Drafts.\n\n"
+        f"<b>post_id:</b> <code>{_e(post_id)}</code>\n"
+        f"<b>candidate_id:</b> <code>{_e(candidate_id)}</code>",
         parse_mode=ParseMode.HTML,
     )
 
@@ -1042,6 +1128,7 @@ def main() -> None:
     app.add_handler(CommandHandler("gen", cmd_gen))
     app.add_handler(CommandHandler("radar", cmd_radar))
     app.add_handler(CommandHandler("intraday_now", cmd_intraday_now))
+    app.add_handler(CommandHandler("intraday_force_draft", cmd_intraday_force_draft))
 
     app.add_handler(CommandHandler("health", cmd_health))
     app.add_handler(CommandHandler("last", cmd_last))
