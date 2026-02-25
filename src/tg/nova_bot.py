@@ -1,6 +1,7 @@
 import os
 import time
 import json
+import html
 import sqlite3
 import asyncio
 import logging
@@ -41,6 +42,10 @@ logger = logging.getLogger(__name__)
 
 def _now_ts() -> int:
     return int(time.time())
+
+
+def _e(s: str) -> str:
+    return html.escape(str(s or ""), quote=False)
 
 
 def _extract_json(s: str) -> str:
