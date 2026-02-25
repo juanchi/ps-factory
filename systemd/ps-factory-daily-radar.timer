@@ -1,8 +1,9 @@
 [Unit]
-Description=Run PS Factory Daily Radar at 07:30 UTC
+Description=Run PS Factory Daily Radar at 07:30 Panama (12:30 UTC)
 
 [Timer]
-OnCalendar=*-*-* 07:30:00 UTC
+# Panama is UTC-5 all year (no DST)
+OnCalendar=*-*-* 12:30:00 UTC
 Persistent=true
 Unit=ps-factory-daily-radar.service
 

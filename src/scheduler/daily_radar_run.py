@@ -5,6 +5,7 @@ import json
 import asyncio
 from difflib import SequenceMatcher
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 from telegram import Bot
@@ -163,7 +164,8 @@ async def run_daily() -> int:
 
     bot = Bot(token=token)
 
-    today = datetime.now(timezone.utc).date().isoformat()
+    run_tz = os.getenv('RADAR_RUN_TZ', 'America/Panama')
+    today = datetime.now(ZoneInfo(run_tz)).date().isoformat()
     today_key = f"scheduler:daily_radar_run:{today}"
     lock_key = f"scheduler:daily_radar_lock:{today}"
     post_id = f"daily-radar-{today.replace('-', '')}"
