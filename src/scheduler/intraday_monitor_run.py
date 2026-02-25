@@ -131,7 +131,11 @@ async def run_intraday_monitor() -> int:
         await _set_last('skip_high_risk', {**base_detail, 'reason': 'high_risk', 'max_risk': max_risk})
         return 0
     if require_link and not has_url:
-        await _set_last('skip_missing_link', {**base_detail, 'reason': 'missing_link'})
+        await _set_last('skip_missing_link', {
+            **base_detail,
+            'reason': 'missing_link',
+            'require_link': require_link,
+        })
         return 0
 
     # cooldown by candidate

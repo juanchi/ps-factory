@@ -567,6 +567,10 @@ async def cmd_intraday_now(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     risk = detail.get("risk")
     has_url = detail.get("has_url")
     title = (detail.get("title") or "")[:140]
+    min_score = detail.get("min_score")
+    min_relevance = detail.get("min_relevance")
+    max_risk = detail.get("max_risk")
+    require_link = detail.get("require_link")
 
     extra = ""
     if title:
@@ -579,6 +583,15 @@ async def cmd_intraday_now(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         extra += f"\n<b>risk:</b> <code>{risk}</code>"
     if has_url is not None:
         extra += f"\n<b>has_link:</b> <code>{'yes' if has_url else 'no'}</code>"
+
+    if min_score is not None:
+        extra += f"\n<b>min_score:</b> <code>{min_score}</code>"
+    if min_relevance is not None:
+        extra += f"\n<b>min_relevance:</b> <code>{min_relevance}</code>"
+    if max_risk is not None:
+        extra += f"\n<b>max_risk:</b> <code>{max_risk}</code>"
+    if require_link is not None:
+        extra += f"\n<b>require_link:</b> <code>{'yes' if bool(require_link) else 'no'}</code>"
 
     await update.message.reply_text(
         "✅ Intraday monitor ejecutado.\n\n"
