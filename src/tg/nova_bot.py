@@ -490,6 +490,7 @@ async def cmd_radar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     post["topic"] = str(post.get("topic") or "Radar X (Top)")
     post["radar_winner_candidate_id"] = winner_id
     post["radar_selected_candidate_id"] = winner_id
+    post["visual_prompt_en"] = build_image_prompt_en(str(post.get("visual_prompt") or ""))
 
     alt_ids = [a["candidate_id"] for a in alternates]
     post["radar_alternate_candidate_ids"] = alt_ids
@@ -720,6 +721,7 @@ async def cmd_intraday_force_draft(update: Update, context: ContextTypes.DEFAULT
     post["topic"] = str(post.get("topic") or "Intraday FORCE")
     post["radar_winner_candidate_id"] = winner_id
     post["radar_selected_candidate_id"] = winner_id
+    post["visual_prompt_en"] = build_image_prompt_en(str(post.get("visual_prompt") or ""))
 
     alt_ids = [a["candidate_id"] for a in alternates]
     post["radar_alternate_candidate_ids"] = alt_ids

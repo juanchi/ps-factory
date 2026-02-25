@@ -66,6 +66,16 @@ def _extract_inline_image(resp_json: dict) -> Tuple[bytes, str]:
     raise ImageGenError("Gemini response did not include inline image data")
 
 
+def build_image_prompt_en(visual_prompt: str) -> str:
+    return (
+        "Create a high-quality social image. "
+        "Aspect ratio must be 4:5 and target output resolution is 1080x1350 pixels. "
+        "All visible text rendered inside the image must be in Spanish. "
+        "Do not include watermarks or logos unless explicitly requested. "
+        f"Creative direction: {visual_prompt}"
+    )
+
+
 def generate_image_gemini(*, visual_prompt: str, timeout_s: int = 90) -> Tuple[bytes, str, str]:
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
     if not api_key:
@@ -73,13 +83,7 @@ def generate_image_gemini(*, visual_prompt: str, timeout_s: int = 90) -> Tuple[b
 
     model = os.getenv("GEMINI_IMAGE_MODEL", "gemini-2.0-flash-preview-image-generation")
 
-    final_prompt = (
-        "Create a high-quality social image. "
-        "Aspect ratio must be 4:5 and target output resolution is 1080x1350 pixels. "
-        "All visible text rendered inside the image must be in Spanish. "
-        "Do not include watermarks or logos unless explicitly requested. "
-        f"Creative direction: {visual_prompt}"
-    )
+    final_prompt = build_image_prompt_en(visual_prompt)
 
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
     payload = {

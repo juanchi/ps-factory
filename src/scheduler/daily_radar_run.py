@@ -16,6 +16,7 @@ from gen.openclaw_gen import openclaw_chat
 from tg.renderers import render_post_html
 from tg.callbacks import build_post_keyboard
 from tg.nova_bot import _extract_json, _prompt_from_candidate, _candidate_preview
+from gen.image_gen import build_image_prompt_en
 from db.sqlite_store import (
     create_post,
     add_version,
@@ -278,6 +279,7 @@ async def run_daily() -> int:
         post['topic'] = str(post.get('topic') or 'Radar X (Top)')
         post['radar_winner_candidate_id'] = winner_id
         post['radar_selected_candidate_id'] = winner_id
+        post['visual_prompt_en'] = build_image_prompt_en(str(post.get('visual_prompt') or ''))
 
         alt_ids = [a['candidate_id'] for a in alternates]
         post['radar_alternate_candidate_ids'] = alt_ids

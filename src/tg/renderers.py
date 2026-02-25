@@ -17,6 +17,7 @@ def render_post_html(post_id: str, version: int, post: Dict[str, Any]) -> str:
     risk = post.get("risk", "")
     caption = post.get("caption", "")
     visual = post.get("visual_prompt", "")
+    visual_en = post.get("visual_prompt_en", "")
 
     qa = post.get("qa") or []
     qa_lines = "\n".join([f"• {_e(x)}" for x in qa]) if qa else "• (sin checklist)"
@@ -66,6 +67,7 @@ def render_post_html(post_id: str, version: int, post: Dict[str, Any]) -> str:
         f"⚠️ <b>Riesgos / matices</b>\n{_e(risk)}\n\n"
         f"📝 <b>Caption sugerido (IG/TikTok/X)</b>\n{_e(caption)}\n\n"
         f"🖼 <b>Prompt visual (4:5)</b>\n{_e(visual)}\n\n"
+        f"🧾 <b>Image prompt EN (provider-ready)</b>\n{_e(visual_en)}\n\n"
         f"✅ <b>Checklist QA</b>\n{qa_lines}"
         f"{radar_block}"
     )
