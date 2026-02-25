@@ -1,7 +1,9 @@
 import os
+import re
 import time
 import json
 import asyncio
+from difflib import SequenceMatcher
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
@@ -21,6 +23,7 @@ from db.sqlite_store import (
     kv_get,
     kv_set,
     get_post,
+    list_recent_latest_posts,
 )
 
 
@@ -82,6 +85,50 @@ async def _notify_once_per_day(*, bot: Bot, ops_chat_id: int, day: str, reason: 
         return
     await _notify(bot, ops_chat_id, text)
     await kv_set(once_key, str(_now_ts()))
+
+
+def _norm_text(s: str) -> str:
+    t = (s or "").lower()
+    t = re.sub(r"https?://\S+|www\.\S+", " ", t)
+    t = re.sub(r"[^a-z0-9áéíóúñ\s]", " ", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    return t
+
+
+def _content_signature(content: dict) -> str:
+    topic = content.get("topic") or ""
+    hook = content.get("hook") or ""
+    caption = content.get("caption") or ""
+    insight = content.get("insight") or ""
+    return _norm_text(f"{topic} || {hook} || {caption} || {insight}")
+
+
+async def _is_duplicate_candidate_or_semantic(post: dict, winner_id: str) -> tuple[bool, str, str | None]:
+    recent_limit = int(os.getenv("DAILY_DUP_RECENT_LIMIT", "30"))
+    sim_threshold = float(os.getenv("DAILY_DUP_SIM_THRESHOLD", "0.90"))
+    recent = await list_recent_latest_posts(limit=recent_limit)
+
+    # 1) duplicate by winner candidate id
+    for r in recent:
+        c = r.get("content") or {}
+        if (c.get("radar_selected_candidate_id") or c.get("radar_winner_candidate_id")) == winner_id:
+            return True, "duplicate_candidate", r.get("post_id")
+
+    # 2) semantic near-duplicate by signature
+    sig_new = _content_signature(post)
+    if len(sig_new) < 30:
+        return False, "", None
+
+    for r in recent:
+        c = r.get("content") or {}
+        sig_old = _content_signature(c)
+        if len(sig_old) < 30:
+            continue
+        sim = SequenceMatcher(None, sig_new, sig_old).ratio()
+        if sim >= sim_threshold:
+            return True, f"duplicate_semantic:{sim:.3f}", r.get("post_id")
+
+    return False, "", None
 
 
 async def run_daily() -> int:
@@ -187,6 +234,32 @@ async def run_daily() -> int:
         post['radar_alternate_candidate_ids'] = alt_ids
         post['radar_winner_preview'] = _candidate_preview(winner)
         post['radar_alternate_previews'] = [_candidate_preview(a) for a in alternates]
+
+        is_dup, dup_reason, dup_of_post = await _is_duplicate_candidate_or_semantic(post, winner_id)
+        if is_dup:
+            await kv_set(today_key, f"skip:{dup_reason}:{dup_of_post or ''}")
+            await _mark_observability(result="skip", winner_score=winner_score, detail=dup_reason)
+            await _notify(
+                bot,
+                ops_chat_id,
+                _ops_message(
+                    level="skip",
+                    title="Daily radar skip por duplicado",
+                    run_id=run_id,
+                    winner_score=winner_score,
+                    reason=dup_reason,
+                    detail=f"dup_of={dup_of_post or 'n/a'}",
+                ),
+            )
+            print(json.dumps({
+                "component": "daily_radar",
+                "result": "skip",
+                "reason": dup_reason,
+                "run_id": run_id,
+                "winner_score": round(winner_score, 3),
+                "dup_of_post": dup_of_post,
+            }, ensure_ascii=False))
+            return 0
 
         bitcoin_anchor = str(post.get('bitcoin_anchor') or '')
         await create_post(post_id=post_id, topic=post['topic'], bitcoin_anchor=bitcoin_anchor)

@@ -214,6 +214,55 @@ async def get_version(post_id: str, version: int) -> Optional[Tuple[int, Any]]:
         await db.close()
 
 
+async def list_recent_latest_posts(limit: int = 20) -> List[Dict[str, Any]]:
+    """
+    Devuelve posts recientes con su última versión (content_json parseado).
+    Útil para anti-duplicado semántico/candidato.
+    """
+    db = await _open_db()
+    try:
+        cur = await db.execute(
+            """
+            SELECT p.id AS post_id, p.status, p.created_at AS post_created_at,
+                   v.version, v.content_json, v.created_at AS version_created_at
+            FROM posts p
+            JOIN post_versions v
+              ON v.post_id = p.id
+             AND v.version = (
+                SELECT MAX(v2.version)
+                FROM post_versions v2
+                WHERE v2.post_id = p.id
+             )
+            ORDER BY p.created_at DESC
+            LIMIT ?
+            """,
+            (int(limit),),
+        )
+        rows = await cur.fetchall()
+        await cur.close()
+
+        out: List[Dict[str, Any]] = []
+        for r in rows:
+            content = {}
+            try:
+                content = json.loads(r["content_json"] or "{}")
+            except Exception:
+                content = {}
+            out.append(
+                {
+                    "post_id": r["post_id"],
+                    "status": r["status"],
+                    "post_created_at": r["post_created_at"],
+                    "version": int(r["version"]),
+                    "version_created_at": r["version_created_at"],
+                    "content": content,
+                }
+            )
+        return out
+    finally:
+        await db.close()
+
+
 # ---------------------------
 # Events
 # ---------------------------
