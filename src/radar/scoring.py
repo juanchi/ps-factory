@@ -1,6 +1,7 @@
 import math
 import re
 from typing import Dict, Tuple, List, Any
+from urllib.parse import urlparse
 
 # ---------------------------
 # Keywords
@@ -24,6 +25,23 @@ RISK_KW: List[str] = [
     "imbecil", "estupido", "estúpido", "basura", "hp"
 ]
 
+# Domain trust scoring (v1)
+HIGH_TRUST_DOMAINS: List[str] = [
+    "reuters.com",
+    "bloomberg.com",
+    "wsj.com",
+    "ft.com",
+    "apnews.com",
+    "coindesk.com",
+    "theblock.co",
+]
+
+LOW_TRUST_DOMAINS: List[str] = [
+    "blogspot.com",
+    "medium.com",
+    "substack.com",
+]
+
 # ---------------------------
 # Helpers
 # ---------------------------
@@ -44,6 +62,37 @@ def _is_rt(text: str) -> bool:
     t = (text or "").lstrip()
     return t.startswith("RT @") or t.startswith("rt @")
 
+def _extract_domains(text: str) -> List[str]:
+    domains: List[str] = []
+    for u in _URL_RE.findall(text or ""):
+        raw = u.strip().rstrip(').,;!?')
+        if raw.lower().startswith("www."):
+            raw = "http://" + raw
+        try:
+            host = (urlparse(raw).netloc or "").lower()
+            if host.startswith("www."):
+                host = host[4:]
+            if host:
+                domains.append(host)
+        except Exception:
+            continue
+    return domains
+
+def _domain_trust_score(domains: List[str]) -> Tuple[float, str]:
+    if not domains:
+        return 0.0, "none"
+
+    def _match(host: str, base: str) -> bool:
+        return host == base or host.endswith("." + base)
+
+    if any(_match(h, d) for h in domains for d in HIGH_TRUST_DOMAINS):
+        return 0.9, "high"
+
+    if any(_match(h, d) for h in domains for d in LOW_TRUST_DOMAINS):
+        return -0.35, "low"
+
+    return 0.0, "unknown"
+
 def _safe_int(x: Any, default: int = 0) -> int:
     try:
         return int(x)
@@ -56,7 +105,7 @@ def _safe_int(x: Any, default: int = 0) -> int:
 
 def score_tweet(tw: Dict, *, source: str) -> Tuple[float, Dict]:
     """
-    PS Factory – Noticia Dura Mode (v3)
+    PS Factory – Noticia Dura Mode (v4: domain trust)
 
     Prioriza:
       - Relevancia BTC/Panamá
@@ -127,12 +176,15 @@ def score_tweet(tw: Dict, *, source: str) -> Tuple[float, Dict]:
     has_url = _has_url(text_raw)
     url_count = _count_urls(text_raw)
     is_rt = _is_rt(text_raw)
+    domains = _extract_domains(text_raw)
 
     link_boost = 0.0
     if has_url:
         link_boost += 2.2
         if url_count >= 2:
             link_boost += 0.3
+
+    domain_boost, domain_trust = _domain_trust_score(domains)
 
     # 🔵 RT inteligente:
     # Solo penaliza si:
@@ -150,7 +202,8 @@ def score_tweet(tw: Dict, *, source: str) -> Tuple[float, Dict]:
         (0.45 * relevance) +
         (0.25 * viral) +
         (0.15 * edu) +
-        link_boost -
+        link_boost +
+        domain_boost -
         (0.35 * risk) -
         rt_penalty
     )
@@ -163,6 +216,9 @@ def score_tweet(tw: Dict, *, source: str) -> Tuple[float, Dict]:
         "edu": round(edu, 2),
         "risk": round(risk, 2),
         "link_boost": round(link_boost, 2),
+        "domain_boost": round(domain_boost, 2),
+        "domain_trust": domain_trust,
+        "domains": domains,
         "rt_penalty": round(rt_penalty, 2),
         "has_url": has_url,
         "url_count": url_count,
