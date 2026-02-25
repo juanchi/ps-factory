@@ -34,6 +34,27 @@ async def _notify(bot: Bot, chat_id: int | None, text: str) -> None:
     await bot.send_message(chat_id=chat_id, text=text, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
 
 
+async def _kv_incr(key: str, step: int = 1) -> int:
+    cur = await kv_get(key)
+    try:
+        n = int(cur) if cur is not None else 0
+    except Exception:
+        n = 0
+    n += step
+    await kv_set(key, str(n))
+    return n
+
+
+async def _mark_observability(*, result: str, winner_score: float | None = None, detail: str = "") -> None:
+    await _kv_incr(f"obs:daily_radar_runs_total:{result}")
+    await kv_set("obs:daily_radar_last_result", result)
+    await kv_set("obs:daily_radar_last_run_ts", str(_now_ts()))
+    if winner_score is not None:
+        await kv_set("obs:daily_radar_last_winner_score", f"{winner_score:.3f}")
+    if detail:
+        await kv_set("obs:daily_radar_last_detail", detail[:500])
+
+
 async def run_daily() -> int:
     load_dotenv('/opt/ps_factory/config/.env', override=True)
 
@@ -48,14 +69,14 @@ async def run_daily() -> int:
     lock_key = f"scheduler:daily_radar_lock:{today}"
     post_id = f"daily-radar-{today.replace('-', '')}"
 
-    # Idempotencia 1: si ya hay draft_ref para el post diario, no duplicar publicación.
     existing = await get_post(post_id)
     if existing and existing.get('draft_chat_id') and existing.get('draft_message_id'):
         await _notify(bot, ops_chat_id, f"ℹ️ Daily radar ya publicado hoy. post_id=<code>{post_id}</code>")
         await kv_set(today_key, str(existing.get('draft_message_id')))
+        await _mark_observability(result="skip", detail="already_published")
         return 0
 
-    # Idempotencia 2: lock simple para evitar doble ejecución concurrente.
+    lock_acquired = False
     lock_val = await kv_get(lock_key)
     now_ts = _now_ts()
     if lock_val:
@@ -63,81 +84,113 @@ async def run_daily() -> int:
             lock_ts = int(lock_val)
         except Exception:
             lock_ts = now_ts
-        if now_ts - lock_ts < 900:  # 15 min
+        if now_ts - lock_ts < 900:
             await _notify(bot, ops_chat_id, f"ℹ️ Daily radar en ejecución o recién corrido. lock=<code>{lock_key}</code>")
+            await _mark_observability(result="skip", detail="lock_recent")
             return 0
     await kv_set(lock_key, str(now_ts))
+    lock_acquired = True
 
-    already = await kv_get(today_key)
-    if already:
-        await _notify(bot, ops_chat_id, f"ℹ️ Daily radar ya ejecutado hoy. key=<code>{today_key}</code>")
-        await kv_set(lock_key, "0")
-        return 0
+    try:
+        already = await kv_get(today_key)
+        if already:
+            await _notify(bot, ops_chat_id, f"ℹ️ Daily radar ya ejecutado hoy. key=<code>{today_key}</code>")
+            await _mark_observability(result="skip", detail="already_marked")
+            return 0
 
-    run_id, winner, alternates = await run_radar_x()
-    winner_id = winner['candidate_id']
-    winner_score = float(winner.get('total_score') or 0.0)
-    min_score = float(os.getenv('RADAR_MIN_SCORE', '0.55'))
+        run_id, winner, alternates = await run_radar_x()
+        winner_id = winner['candidate_id']
+        winner_score = float(winner.get('total_score') or 0.0)
+        min_score = float(os.getenv('RADAR_MIN_SCORE', '0.55'))
 
-    if winner_score < min_score:
-        await kv_set(today_key, f"skip:{winner_score:.3f}")
-        await kv_set(lock_key, "0")
+        if winner_score < min_score:
+            await kv_set(today_key, f"skip:{winner_score:.3f}")
+            await _mark_observability(result="skip", winner_score=winner_score, detail="below_threshold")
+            await _notify(
+                bot,
+                ops_chat_id,
+                "🟡 Daily radar ejecutado, skip por umbral editorial.\n\n"
+                f"<b>run_id:</b> <code>{run_id}</code>\n"
+                f"<b>winner_score:</b> <code>{winner_score:.3f}</code>\n"
+                f"<b>min_score:</b> <code>{min_score:.3f}</code>",
+            )
+            print(json.dumps({
+                "component": "daily_radar",
+                "result": "skip",
+                "run_id": run_id,
+                "winner_score": round(winner_score, 3),
+                "min_score": round(min_score, 3),
+            }, ensure_ascii=False))
+            return 0
+
+        prompt = await _prompt_from_candidate(winner)
+        raw = openclaw_chat(prompt)
+        post = json.loads(_extract_json(raw))
+
+        post['post_id'] = post_id
+        post['topic'] = str(post.get('topic') or 'Radar X (Top)')
+        post['radar_winner_candidate_id'] = winner_id
+        post['radar_selected_candidate_id'] = winner_id
+
+        alt_ids = [a['candidate_id'] for a in alternates]
+        post['radar_alternate_candidate_ids'] = alt_ids
+        post['radar_winner_preview'] = _candidate_preview(winner)
+        post['radar_alternate_previews'] = [_candidate_preview(a) for a in alternates]
+
+        bitcoin_anchor = str(post.get('bitcoin_anchor') or '')
+        await create_post(post_id=post_id, topic=post['topic'], bitcoin_anchor=bitcoin_anchor)
+        await add_version(post_id=post_id, version=1, content=post)
+        await log_event(post_id, 'RADAR_GEN_DAILY', {
+            'run_id': run_id,
+            'winner': winner_id,
+            'winner_score': winner_score,
+            'min_score': min_score,
+            'alts': alt_ids,
+        })
+
+        msg = await bot.send_message(
+            chat_id=drafts_chat_id,
+            text=render_post_html(post_id, 1, post),
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True,
+            reply_markup=build_post_keyboard(post_id, candidate_ids=alt_ids),
+        )
+        await set_draft_message_ref(post_id, drafts_chat_id, msg.message_id)
+
+        await kv_set(today_key, f"ok:{post_id}:{msg.message_id}")
+        await _mark_observability(result="ok", winner_score=winner_score, detail=post_id)
+
         await _notify(
             bot,
             ops_chat_id,
-            "🟡 Daily radar ejecutado, skip por umbral editorial.\n\n"
+            "✅ Daily radar enviado a Drafts.\n\n"
             f"<b>run_id:</b> <code>{run_id}</code>\n"
-            f"<b>winner_score:</b> <code>{winner_score:.3f}</code>\n"
-            f"<b>min_score:</b> <code>{min_score:.3f}</code>",
+            f"<b>post_id:</b> <code>{post_id}</code>\n"
+            f"<b>winner_score:</b> <code>{winner_score:.3f}</code>",
         )
+        print(json.dumps({
+            "component": "daily_radar",
+            "result": "ok",
+            "run_id": run_id,
+            "post_id": post_id,
+            "winner_score": round(winner_score, 3),
+            "draft_message_id": msg.message_id,
+        }, ensure_ascii=False))
         return 0
 
-    prompt = await _prompt_from_candidate(winner)
-    raw = openclaw_chat(prompt)
-    post = json.loads(_extract_json(raw))
+    except Exception as e:
+        await _mark_observability(result="error", detail=str(e))
+        await _notify(bot, ops_chat_id, f"🔴 Daily radar error: <code>{str(e)[:300]}</code>")
+        print(json.dumps({
+            "component": "daily_radar",
+            "result": "error",
+            "error": str(e)[:300],
+        }, ensure_ascii=False))
+        raise
 
-    post['post_id'] = post_id
-    post['topic'] = str(post.get('topic') or 'Radar X (Top)')
-    post['radar_winner_candidate_id'] = winner_id
-    post['radar_selected_candidate_id'] = winner_id
-
-    alt_ids = [a['candidate_id'] for a in alternates]
-    post['radar_alternate_candidate_ids'] = alt_ids
-    post['radar_winner_preview'] = _candidate_preview(winner)
-    post['radar_alternate_previews'] = [_candidate_preview(a) for a in alternates]
-
-    bitcoin_anchor = str(post.get('bitcoin_anchor') or '')
-    await create_post(post_id=post_id, topic=post['topic'], bitcoin_anchor=bitcoin_anchor)
-    await add_version(post_id=post_id, version=1, content=post)
-    await log_event(post_id, 'RADAR_GEN_DAILY', {
-        'run_id': run_id,
-        'winner': winner_id,
-        'winner_score': winner_score,
-        'min_score': min_score,
-        'alts': alt_ids,
-    })
-
-    msg = await bot.send_message(
-        chat_id=drafts_chat_id,
-        text=render_post_html(post_id, 1, post),
-        parse_mode=ParseMode.HTML,
-        disable_web_page_preview=True,
-        reply_markup=build_post_keyboard(post_id, candidate_ids=alt_ids),
-    )
-    await set_draft_message_ref(post_id, drafts_chat_id, msg.message_id)
-
-    await kv_set(today_key, f"ok:{post_id}:{msg.message_id}")
-    await kv_set(lock_key, "0")
-
-    await _notify(
-        bot,
-        ops_chat_id,
-        "✅ Daily radar enviado a Drafts.\n\n"
-        f"<b>run_id:</b> <code>{run_id}</code>\n"
-        f"<b>post_id:</b> <code>{post_id}</code>\n"
-        f"<b>winner_score:</b> <code>{winner_score:.3f}</code>",
-    )
-    return 0
+    finally:
+        if lock_acquired:
+            await kv_set(lock_key, "0")
 
 
 if __name__ == '__main__':
