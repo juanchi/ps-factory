@@ -71,6 +71,9 @@ def build_image_prompt_en(visual_prompt: str) -> str:
         "Create a high-quality social image. "
         "Aspect ratio must be 4:5 and target output resolution is 1080x1350 pixels. "
         "All visible text rendered inside the image must be in Spanish. "
+        "Add one short, punchy headline in Spanish (max 6 words), high-contrast, easy to read on mobile. "
+        "Place headline near the top with strong visual hierarchy. "
+        "Do not include the phrase 'Bitcoin Anchor' as literal on-image text. "
         "Do not include watermarks or logos unless explicitly requested. "
         f"Creative direction: {visual_prompt}"
     )
