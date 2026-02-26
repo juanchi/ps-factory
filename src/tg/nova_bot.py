@@ -1016,6 +1016,106 @@ Responde SOLO el JSON.
     await update.message.reply_text("✅ Listo. Enviado a Drafts.", parse_mode=ParseMode.HTML)
 
 
+async def cmd_carousel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    topic = " ".join(context.args).strip()
+    if not topic:
+        await update.message.reply_text("Uso: <code>/carousel &lt;tema&gt;</code>", parse_mode=ParseMode.HTML)
+        return
+
+    await update.message.reply_text("🧩 Generando carrusel (fase 1)...", parse_mode=ParseMode.HTML)
+
+    prompt = f"""
+Eres editor de contenido de Panamá Soberano. Responde SOLO JSON válido.
+Objetivo: crear un carrusel de 6 slides para Instagram (español), con storytelling claro.
+Tema: {topic}
+
+Devuelve este JSON exacto:
+{{
+  "topic": "string",
+  "slides": [
+    {{"n":1,"title":"string","body":"string","visual_prompt":"string"}},
+    {{"n":2,"title":"string","body":"string","visual_prompt":"string"}},
+    {{"n":3,"title":"string","body":"string","visual_prompt":"string"}},
+    {{"n":4,"title":"string","body":"string","visual_prompt":"string"}},
+    {{"n":5,"title":"string","body":"string","visual_prompt":"string"}},
+    {{"n":6,"title":"string","body":"string","visual_prompt":"string"}}
+  ],
+  "caption": "string"
+}}
+
+Reglas:
+- títulos de 4-8 palabras
+- body corto (máx ~70 palabras), cerrar con sentido
+- tono educativo/estratégico, no partidista
+""".strip()
+
+    raw = openclaw_chat(prompt)
+    try:
+        car = json.loads(_extract_json(raw))
+    except Exception:
+        await update.message.reply_text("❌ No vino JSON válido para carrusel.", parse_mode=ParseMode.HTML)
+        return
+
+    slides = car.get("slides") or []
+    if not isinstance(slides, list) or not slides:
+        await update.message.reply_text("❌ Carrusel inválido: faltan slides.", parse_mode=ParseMode.HTML)
+        return
+
+    slides = slides[:6]
+    post_id = f"car-{_now_ts()}"
+    topic_out = str(car.get("topic") or topic)
+    caption = str(car.get("caption") or "")
+
+    content = {
+        "post_id": post_id,
+        "topic": topic_out,
+        "carousel": slides,
+        "caption": caption,
+    }
+
+    await create_post(post_id=post_id, topic=topic_out, bitcoin_anchor="")
+    await add_version(post_id=post_id, version=1, content=content)
+    await log_event(post_id, "CAROUSEL_GEN", {"source": "telegram", "slides": len(slides)})
+
+    drafts_chat_id = int(os.environ["TG_DRAFTS_CHAT_ID"])
+    await context.bot.send_message(
+        chat_id=drafts_chat_id,
+        text=(
+            f"🧩 <b>CARRUSEL v1</b> — <code>{_e(post_id)}</code>\n"
+            f"<b>Tema:</b> {_e(topic_out)}\n"
+            f"<b>Slides:</b> <code>{len(slides)}</code>\n\n"
+            "<i>Fase 1:</i> guion + prompts por slide."
+        ),
+        parse_mode=ParseMode.HTML,
+        disable_web_page_preview=True,
+    )
+
+    for i, s in enumerate(slides, start=1):
+        title = _e(str(s.get("title") or f"Slide {i}"))
+        body = _e(str(s.get("body") or ""))
+        vp = _e(str(s.get("visual_prompt") or ""))
+        await context.bot.send_message(
+            chat_id=drafts_chat_id,
+            text=(
+                f"<b>Slide {i}: {title}</b>\n\n"
+                f"{body}\n\n"
+                f"🖼 <b>Prompt visual</b>\n{vp}"
+            ),
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True,
+        )
+
+    if caption:
+        await context.bot.send_message(
+            chat_id=drafts_chat_id,
+            text=f"📝 <b>Caption carrusel sugerido</b>\n{_e(caption)}",
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True,
+        )
+
+    await update.message.reply_text("✅ Carrusel enviado a Drafts (fase 1).", parse_mode=ParseMode.HTML)
+
+
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
@@ -1531,6 +1631,7 @@ def main() -> None:
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("demo", cmd_demo))
     app.add_handler(CommandHandler("gen", cmd_gen))
+    app.add_handler(CommandHandler("carousel", cmd_carousel))
     app.add_handler(CommandHandler("radar", cmd_radar))
     app.add_handler(CommandHandler("intraday_now", cmd_intraday_now))
     app.add_handler(CommandHandler("intraday_force_draft", cmd_intraday_force_draft))
