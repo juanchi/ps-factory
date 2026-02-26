@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import html
 import asyncio
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -17,13 +18,19 @@ def _now_ts() -> int:
     return int(time.time())
 
 
+def _escape_html(s: str) -> str:
+    return html.escape(str(s or ""), quote=False)
+
+
 def _ops_message(title: str, *, run_id: str, candidate_id: str, score: float, relevance: float, risk: float, has_url: bool, alternates: list[dict] | None = None, reason: str = "impact_candidate") -> str:
     alt_lines = ""
     if alternates:
         rows = []
         for i, a in enumerate(alternates[:3], start=1):
+            t = str(a.get('title') or '').strip()[:110]
             rows.append(
-                f"{i}) <code>{a.get('candidate_id','')}</code> · score <code>{float(a.get('total_score') or 0):.3f}</code> · rel <code>{float(a.get('relevance') or 0):.2f}</code>"
+                f"{i}) {_escape_html(t)}\n"
+                f"   <code>{a.get('candidate_id','')}</code> · score <code>{float(a.get('total_score') or 0):.3f}</code> · rel <code>{float(a.get('relevance') or 0):.2f}</code>"
             )
         alt_lines = "\n<b>alternates:</b>\n" + "\n".join(rows)
 

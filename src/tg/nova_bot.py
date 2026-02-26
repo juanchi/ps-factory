@@ -812,8 +812,10 @@ async def cmd_intraday_now(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if alternates:
         extra += "\n\n<b>Alternativas (Top no ganador)</b>"
         for i, a in enumerate(alternates[:3], start=1):
+            atitle = _e(str(a.get('title') or '')[:110])
             extra += (
-                f"\n{i}) <code>{_e(a.get('candidate_id') or '')}</code>"
+                f"\n{i}) {atitle}"
+                f"\n   <code>{_e(a.get('candidate_id') or '')}</code>"
                 f" · score <code>{_e(a.get('total_score'))}</code>"
                 f" · rel <code>{_e(a.get('relevance'))}</code>"
             )
