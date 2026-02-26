@@ -1,0 +1,3 @@
+# PS Factory runtime dependencies (incremental)
+# NOTE: existing environments may already have other libs from prior setup.
+Pillow>=10.0.0

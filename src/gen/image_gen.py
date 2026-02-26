@@ -1,7 +1,11 @@
 import os
 import base64
+import logging
 import requests
 from typing import Tuple
+
+
+logger = logging.getLogger(__name__)
 
 
 class ImageGenError(RuntimeError):
@@ -100,8 +104,8 @@ def _apply_watermark_if_enabled(data: bytes, mime: str) -> Tuple[bytes, str]:
     try:
         from io import BytesIO
         from PIL import Image, ImageDraw, ImageFont
-    except Exception:
-        # If Pillow is not available, keep original image.
+    except Exception as e:
+        logger.warning("Watermark enabled but Pillow is not available; skipping watermark. error=%s", e)
         return data, mime
 
     with Image.open(BytesIO(data)).convert("RGBA") as im:
@@ -130,6 +134,8 @@ def _apply_watermark_if_enabled(data: bytes, mime: str) -> Tuple[bytes, str]:
             x, y = (w - tw) // 2, (h - th) // 2
         else:
             x, y = w - tw - margin, h - th - margin
+
+        logger.info("Applying watermark text='%s' position='%s' opacity=%.2f", text, position, opacity)
 
         # add subtle background plate to improve readability
         pad = max(8, int(base_size * 0.35))
