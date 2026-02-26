@@ -5,6 +5,7 @@ import html
 import sqlite3
 import asyncio
 import logging
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -48,6 +49,56 @@ def _now_ts() -> int:
 
 def _e(s: str) -> str:
     return html.escape(str(s or ""), quote=False)
+
+
+def _utc_day_key() -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%d")
+
+
+def _compose_publish_pack(post_id: str, ver: int, content: dict) -> str:
+    topic = str(content.get("topic") or "POST")
+    hook = str(content.get("hook") or "").strip()
+    explain = str(content.get("explain_simple") or "").strip()
+    caption = str(content.get("caption") or "").strip()
+    anchor = str(content.get("bitcoin_anchor") or "").strip()
+
+    use_emojis = os.getenv("SOCIAL_USE_EMOJIS", "1").strip().lower() in {"1", "true", "yes", "on"}
+    brand_tag = os.getenv("SOCIAL_BRAND_HASHTAG", "#PanamáSoberano").strip() or "#PanamáSoberano"
+    second_tag = os.getenv("SOCIAL_SECOND_HASHTAG", "").strip()
+    tags = " ".join([t for t in [brand_tag, second_tag] if t]).strip()
+
+    e1 = "⚡ " if use_emojis else ""
+    e2 = "📌 " if use_emojis else ""
+    e3 = "🎯 " if use_emojis else ""
+
+    x_copy = (
+        f"{e1}{hook}\n\n"
+        f"{caption[:180]}\n\n"
+        f"{e2}{anchor[:140]}\n"
+        f"{tags}"
+    ).strip()
+
+    ig_copy = (
+        f"{e1}{hook}\n\n"
+        f"{explain[:280]}\n\n"
+        f"{e2}{anchor[:180]}\n\n"
+        f"{e3}{caption[:180]}\n\n"
+        f"{tags}"
+    ).strip()
+
+    tiktok_copy = (
+        f"{e1}{hook}\n"
+        f"{explain[:180]}\n\n"
+        f"{e3}{caption[:140]}\n"
+        f"{tags}"
+    ).strip()
+
+    return (
+        f"🟠 <b>{_e(topic)}</b> — <code>{_e(post_id)}</code> · v{ver}\n\n"
+        f"<b>X</b>\n<code>{_e(x_copy)}</code>\n\n"
+        f"<b>Instagram</b>\n<code>{_e(ig_copy)}</code>\n\n"
+        f"<b>TikTok</b>\n<code>{_e(tiktok_copy)}</code>"
+    )
 
 
 def _extract_json(s: str) -> str:
@@ -969,12 +1020,45 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         image_only_on_approve = os.getenv("IMAGE_ONLY_ON_APPROVE", "1").strip().lower() in {"1", "true", "yes", "on"}
         image_timeout_s = int(os.getenv("IMAGE_TIMEOUT_SECONDS", "90"))
         image_max_attempts = int(os.getenv("IMAGE_45_MAX_ATTEMPTS", "3"))
+        max_images_per_day = int(os.getenv("IMAGE_MAX_APPROVE_PER_DAY", "20"))
+
+        post_db = await get_post(post_id)
+        if post_db and str(post_db.get("status") or "").lower() == "approved":
+            await query.message.reply_text("ℹ️ Este post ya fue aprobado. No se regenera imagen.", parse_mode=ParseMode.HTML)
+            return
+
+        lock_key = f"approve:lock:{post_id}"
+        lock_val = await kv_get(lock_key)
+        if lock_val:
+            try:
+                lock_age = _now_ts() - int(lock_val)
+            except Exception:
+                lock_age = 9999
+            if lock_age < 120:
+                await query.message.reply_text("⏳ APPROVE en progreso para este post. Espera unos segundos.", parse_mode=ParseMode.HTML)
+                return
+        await kv_set(lock_key, str(_now_ts()))
 
         latest = await get_latest_version(post_id)
         if latest:
             ver, content = latest
 
             if image_only_on_approve:
+                day_key = _utc_day_key()
+                img_day_counter_key = f"image:approve:day:{day_key}:count"
+                raw_day_count = await kv_get(img_day_counter_key)
+                try:
+                    day_count = int(raw_day_count or "0")
+                except Exception:
+                    day_count = 0
+                if day_count >= max_images_per_day:
+                    await query.message.reply_text(
+                        "🟠 APPROVE bloqueado: se alcanzó el límite diario de generación de imágenes.",
+                        parse_mode=ParseMode.HTML,
+                    )
+                    await log_event(post_id, "APPROVE_BLOCKED_IMAGE_BUDGET", {"by": approver, "day": day_key, "count": day_count})
+                    return
+
                 visual_prompt = str((content or {}).get("visual_prompt") or "").strip()
                 if not visual_prompt:
                     await query.message.reply_text("❌ APPROVE bloqueado: falta <code>visual_prompt</code> en el draft.", parse_mode=ParseMode.HTML)
@@ -1030,19 +1114,20 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 )
                 sent = await context.bot.send_message(
                     chat_id=approved_chat_id,
-                    text=render_post_html(post_id, ver, content),
+                    text=_compose_publish_pack(post_id, ver, content),
                     parse_mode=ParseMode.HTML,
                     disable_web_page_preview=True,
                 )
+                await kv_set(img_day_counter_key, str(day_count + 1))
                 await log_event(
                     post_id,
                     "APPROVE_IMAGE_OK",
-                    {"by": approver, "version": ver, "mime": img_mime, "provider_prompt": provider_prompt[:500], "photo_message_id": photo_msg.message_id},
+                    {"by": approver, "version": ver, "mime": img_mime, "provider_prompt": provider_prompt[:500], "photo_message_id": photo_msg.message_id, "day_count": day_count + 1},
                 )
             else:
                 sent = await context.bot.send_message(
                     chat_id=approved_chat_id,
-                    text=f"✅ <b>APROBADO</b> por: <code>{_e(approver)}</code>\n\n" + render_post_html(post_id, ver, content),
+                    text=f"✅ <b>APROBADO</b> por: <code>{_e(approver)}</code>\n\n" + _compose_publish_pack(post_id, ver, content),
                     parse_mode=ParseMode.HTML,
                     disable_web_page_preview=True,
                 )
@@ -1066,6 +1151,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
         await query.edit_message_reply_markup(reply_markup=None)
         await query.message.reply_text(f"✅ Aprobado por {approver} y reenviado a PS | Aprobados.")
+        await kv_set(lock_key, "0")
         return
 
     if data.startswith("REGEN:"):
