@@ -29,6 +29,12 @@ def render_post_html(post_id: str, version: int, post: Dict[str, Any]) -> str:
     qa = (post.get("qa") or [])[:5]
     qa_lines = "\n".join([f"• {_e(_clip(x, 140))}" for x in qa]) if qa else "• (sin checklist)"
 
+    alerts = post.get("daily_editorial_alerts") or []
+    alerts_block = ""
+    if alerts:
+        lines = "\n".join([f"• {_e(_clip(a, 120))}" for a in alerts[:4]])
+        alerts_block = f"\n\n🟡 <b>Alertas editoriales (forzado)</b>\n{lines}"
+
     selected = post.get("radar_selected_candidate_id") or post.get("radar_winner_candidate_id")
     selected_preview = post.get("radar_selected_preview") or post.get("radar_winner_preview") or {}
 
@@ -76,6 +82,7 @@ def render_post_html(post_id: str, version: int, post: Dict[str, Any]) -> str:
         f"🖼 <b>Prompt visual (4:5)</b>\n{_e(visual)}\n\n"
         f"🧾 <b>Image prompt EN (provider-ready)</b>\n{_e(visual_en)}\n\n"
         f"✅ <b>Checklist QA</b>\n{qa_lines}"
+        f"{alerts_block}"
         f"{radar_block}"
     )
 

@@ -224,54 +224,60 @@ async def run_daily() -> int:
         winner_id = winner['candidate_id']
         winner_score = float(winner.get('total_score') or 0.0)
         min_score = float(os.getenv('RADAR_MIN_SCORE', '0.55'))
+        force_draft = os.getenv('DAILY_RADAR_FORCE_DRAFT', '1').strip().lower() in {'1', 'true', 'yes', 'on'}
+        editorial_alerts: list[str] = []
 
         if winner_score < min_score:
-            await kv_set(today_key, f"skip:{winner_score:.3f}")
-            await _mark_observability(result="skip", winner_score=winner_score, detail="below_threshold")
-            await _notify(
-                bot,
-                ops_chat_id,
-                _ops_message(
-                    level="skip",
-                    title="Daily radar skip por umbral editorial",
-                    run_id=run_id,
-                    winner_score=winner_score,
-                    min_score=min_score,
-                    reason="below_threshold",
-                ),
-            )
-            print(json.dumps({
-                "component": "daily_radar",
-                "result": "skip",
-                "run_id": run_id,
-                "winner_score": round(winner_score, 3),
-                "min_score": round(min_score, 3),
-            }, ensure_ascii=False))
-            return 0
+            if not force_draft:
+                await kv_set(today_key, f"skip:{winner_score:.3f}")
+                await _mark_observability(result="skip", winner_score=winner_score, detail="below_threshold")
+                await _notify(
+                    bot,
+                    ops_chat_id,
+                    _ops_message(
+                        level="skip",
+                        title="Daily radar skip por umbral editorial",
+                        run_id=run_id,
+                        winner_score=winner_score,
+                        min_score=min_score,
+                        reason="below_threshold",
+                    ),
+                )
+                print(json.dumps({
+                    "component": "daily_radar",
+                    "result": "skip",
+                    "run_id": run_id,
+                    "winner_score": round(winner_score, 3),
+                    "min_score": round(min_score, 3),
+                }, ensure_ascii=False))
+                return 0
+            editorial_alerts.append(f"below_threshold:{winner_score:.3f}<{min_score:.3f}")
 
         gate_reason = _quality_gate_reason(winner)
         if gate_reason:
-            await kv_set(today_key, f"skip:{gate_reason}")
-            await _mark_observability(result="skip", winner_score=winner_score, detail=gate_reason)
-            await _notify(
-                bot,
-                ops_chat_id,
-                _ops_message(
-                    level="skip",
-                    title="Daily radar skip por quality gate",
-                    run_id=run_id,
-                    winner_score=winner_score,
-                    reason=gate_reason,
-                ),
-            )
-            print(json.dumps({
-                "component": "daily_radar",
-                "result": "skip",
-                "run_id": run_id,
-                "winner_score": round(winner_score, 3),
-                "reason": gate_reason,
-            }, ensure_ascii=False))
-            return 0
+            if not force_draft:
+                await kv_set(today_key, f"skip:{gate_reason}")
+                await _mark_observability(result="skip", winner_score=winner_score, detail=gate_reason)
+                await _notify(
+                    bot,
+                    ops_chat_id,
+                    _ops_message(
+                        level="skip",
+                        title="Daily radar skip por quality gate",
+                        run_id=run_id,
+                        winner_score=winner_score,
+                        reason=gate_reason,
+                    ),
+                )
+                print(json.dumps({
+                    "component": "daily_radar",
+                    "result": "skip",
+                    "run_id": run_id,
+                    "winner_score": round(winner_score, 3),
+                    "reason": gate_reason,
+                }, ensure_ascii=False))
+                return 0
+            editorial_alerts.append(gate_reason)
 
         prompt = await _prompt_from_candidate(winner)
         raw = openclaw_chat(prompt)
@@ -287,32 +293,36 @@ async def run_daily() -> int:
         post['radar_alternate_candidate_ids'] = alt_ids
         post['radar_winner_preview'] = _candidate_preview(winner)
         post['radar_alternate_previews'] = [_candidate_preview(a) for a in alternates]
+        if editorial_alerts:
+            post['daily_editorial_alerts'] = editorial_alerts
 
         is_dup, dup_reason, dup_of_post = await _is_duplicate_candidate_or_semantic(post, winner_id)
         if is_dup:
-            await kv_set(today_key, f"skip:{dup_reason}:{dup_of_post or ''}")
-            await _mark_observability(result="skip", winner_score=winner_score, detail=dup_reason)
-            await _notify(
-                bot,
-                ops_chat_id,
-                _ops_message(
-                    level="skip",
-                    title="Daily radar skip por duplicado",
-                    run_id=run_id,
-                    winner_score=winner_score,
-                    reason=dup_reason,
-                    detail=f"dup_of={dup_of_post or 'n/a'}",
-                ),
-            )
-            print(json.dumps({
-                "component": "daily_radar",
-                "result": "skip",
-                "reason": dup_reason,
-                "run_id": run_id,
-                "winner_score": round(winner_score, 3),
-                "dup_of_post": dup_of_post,
-            }, ensure_ascii=False))
-            return 0
+            if not force_draft:
+                await kv_set(today_key, f"skip:{dup_reason}:{dup_of_post or ''}")
+                await _mark_observability(result="skip", winner_score=winner_score, detail=dup_reason)
+                await _notify(
+                    bot,
+                    ops_chat_id,
+                    _ops_message(
+                        level="skip",
+                        title="Daily radar skip por duplicado",
+                        run_id=run_id,
+                        winner_score=winner_score,
+                        reason=dup_reason,
+                        detail=f"dup_of={dup_of_post or 'n/a'}",
+                    ),
+                )
+                print(json.dumps({
+                    "component": "daily_radar",
+                    "result": "skip",
+                    "reason": dup_reason,
+                    "run_id": run_id,
+                    "winner_score": round(winner_score, 3),
+                    "dup_of_post": dup_of_post,
+                }, ensure_ascii=False))
+                return 0
+            editorial_alerts.append(f"{dup_reason}:{dup_of_post or 'n/a'}")
 
         bitcoin_anchor = str(post.get('bitcoin_anchor') or '')
         await create_post(post_id=post_id, topic=post['topic'], bitcoin_anchor=bitcoin_anchor)
@@ -335,26 +345,32 @@ async def run_daily() -> int:
         await set_draft_message_ref(post_id, drafts_chat_id, msg.message_id)
 
         await kv_set(today_key, f"ok:{post_id}:{msg.message_id}")
-        await _mark_observability(result="ok", winner_score=winner_score, detail=post_id)
+        await _mark_observability(
+            result=("ok_forced" if editorial_alerts else "ok"),
+            winner_score=winner_score,
+            detail=(";".join(editorial_alerts)[:180] if editorial_alerts else post_id),
+        )
 
         await _notify(
             bot,
             ops_chat_id,
             _ops_message(
-                level="ok",
-                title="Daily radar enviado a Drafts",
+                level=("skip" if editorial_alerts else "ok"),
+                title=("Daily radar forzado a Drafts con alertas" if editorial_alerts else "Daily radar enviado a Drafts"),
                 run_id=run_id,
                 post_id=post_id,
                 winner_score=winner_score,
+                detail=("; ".join(editorial_alerts)[:180] if editorial_alerts else None),
             ),
         )
         print(json.dumps({
             "component": "daily_radar",
-            "result": "ok",
+            "result": ("ok_forced" if editorial_alerts else "ok"),
             "run_id": run_id,
             "post_id": post_id,
             "winner_score": round(winner_score, 3),
             "draft_message_id": msg.message_id,
+            "editorial_alerts": editorial_alerts,
         }, ensure_ascii=False))
         return 0
 
