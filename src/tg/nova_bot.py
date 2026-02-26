@@ -779,6 +779,7 @@ async def cmd_intraday_now(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     delta_score = detail.get("delta_score")
     delta_relevance = detail.get("delta_relevance")
     delta_risk = detail.get("delta_risk")
+    alternates = detail.get("alternates") or []
 
     extra = ""
     if title:
@@ -808,7 +809,17 @@ async def cmd_intraday_now(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if delta_risk is not None:
         extra += f"\n<b>delta_risk:</b> <code>{delta_risk}</code>"
 
+    if alternates:
+        extra += "\n\n<b>Alternativas (Top no ganador)</b>"
+        for i, a in enumerate(alternates[:3], start=1):
+            extra += (
+                f"\n{i}) <code>{_e(a.get('candidate_id') or '')}</code>"
+                f" · score <code>{_e(a.get('total_score'))}</code>"
+                f" · rel <code>{_e(a.get('relevance'))}</code>"
+            )
+
     extra += "\n\n<i>Si igual lo quieres, usa:</i> <code>/intraday_force_draft</code>"
+    extra += "\n<i>Alterno específico:</i> <code>/intraday_force_draft 1|2|3</code> o <code>/intraday_force_draft &lt;candidate_id&gt;</code>"
 
     await update.message.reply_text(
         "✅ Intraday monitor ejecutado.\n\n"
@@ -829,15 +840,24 @@ async def cmd_intraday_force_draft(update: Update, context: ContextTypes.DEFAULT
         return
 
     candidate_id = None
+    raw = await kv_get("intraday:last_detail")
+    try:
+        d = json.loads(raw or "{}")
+    except Exception:
+        d = {}
+
     if context.args:
-        candidate_id = (context.args[0] or "").strip()
+        arg = (context.args[0] or "").strip()
+        if arg in {"1", "2", "3"}:
+            alts = d.get("alternates") or []
+            try:
+                candidate_id = str((alts[int(arg)-1] or {}).get("candidate_id") or "").strip()
+            except Exception:
+                candidate_id = ""
+        else:
+            candidate_id = arg
 
     if not candidate_id:
-        raw = await kv_get("intraday:last_detail")
-        try:
-            d = json.loads(raw or "{}")
-        except Exception:
-            d = {}
         candidate_id = (d.get("candidate_id") or "").strip()
 
     if not candidate_id:
@@ -890,79 +910,6 @@ async def cmd_intraday_force_draft(update: Update, context: ContextTypes.DEFAULT
         "✅ Draft forzado enviado a Drafts.\n\n"
         f"<b>post_id:</b> <code>{_e(post_id)}</code>\n"
         f"<b>candidate_id:</b> <code>{_e(candidate_id)}</code>",
-        parse_mode=ParseMode.HTML,
-    )
-
-
-async def cmd_intraday_force_draft(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    ops_chat_id = int(os.getenv("TG_OPS_CHAT_ID", "0") or 0)
-    effective_chat = update.effective_chat.id if update.effective_chat else 0
-
-    if ops_chat_id and int(effective_chat) != ops_chat_id:
-        await update.message.reply_text("❌ Este comando solo está permitido en PS | OPS.")
-        return
-
-    await _safe_reply(update, "🛠 Ejecutando intraday FORCE -> Draft...")
-
-    try:
-        run_id, winner, alternates = await run_radar_x()
-    except Exception as e:
-        await update.message.reply_text(f"❌ Radar falló: <code>{str(e)[:500]}</code>", parse_mode=ParseMode.HTML)
-        return
-
-    winner_id = winner["candidate_id"]
-    winner_score = float(winner.get("total_score") or 0.0)
-
-    prompt = await _prompt_from_candidate(winner)
-    raw = openclaw_chat(prompt)
-    try:
-        post = json.loads(_extract_json(raw))
-    except Exception:
-        await update.message.reply_text("❌ El modelo no devolvió JSON válido.", parse_mode=ParseMode.HTML)
-        return
-
-    post_id = f"intraday-{_now_ts()}"
-    post["post_id"] = post_id
-    post["topic"] = str(post.get("topic") or "Intraday FORCE")
-    post["radar_winner_candidate_id"] = winner_id
-    post["radar_selected_candidate_id"] = winner_id
-    post["visual_prompt_en"] = build_image_prompt_en(str(post.get("visual_prompt") or ""))
-
-    alt_ids = [a["candidate_id"] for a in alternates]
-    post["radar_alternate_candidate_ids"] = alt_ids
-    post["radar_winner_preview"] = _candidate_preview(winner)
-    post["radar_alternate_previews"] = [_candidate_preview(a) for a in alternates]
-
-    bitcoin_anchor = str(post.get("bitcoin_anchor") or "")
-    await create_post(post_id=post_id, topic=post["topic"], bitcoin_anchor=bitcoin_anchor)
-    await add_version(post_id=post_id, version=1, content=post)
-    await log_event(post_id, "INTRADAY_FORCE_DRAFT", {
-        "run_id": run_id,
-        "winner": winner_id,
-        "winner_score": winner_score,
-        "alts": alt_ids,
-    })
-
-    drafts_chat_id = int(os.getenv("TG_DRAFTS_CHAT_ID", "0") or 0)
-    if not drafts_chat_id:
-        await update.message.reply_text("❌ TG_DRAFTS_CHAT_ID no está configurado.")
-        return
-
-    msg = await _send_draft_payload(
-        context,
-        chat_id=drafts_chat_id,
-        post_id=post_id,
-        version=1,
-        post=post,
-        candidate_ids=alt_ids,
-    )
-    await set_draft_message_ref(post_id, drafts_chat_id, msg.message_id)
-
-    await update.message.reply_text(
-        "✅ FORCE enviado a Drafts.\n\n"
-        f"<b>run_id:</b> <code>{run_id}</code>\n"
-        f"<b>post_id:</b> <code>{post_id}</code>\n"
-        f"<b>winner_score:</b> <code>{winner_score:.3f}</code>",
         parse_mode=ParseMode.HTML,
     )
 
@@ -1523,7 +1470,6 @@ def main() -> None:
     app.add_handler(CommandHandler("gen", cmd_gen))
     app.add_handler(CommandHandler("radar", cmd_radar))
     app.add_handler(CommandHandler("intraday_now", cmd_intraday_now))
-    app.add_handler(CommandHandler("intraday_force_draft", cmd_intraday_force_draft))
     app.add_handler(CommandHandler("intraday_force_draft", cmd_intraday_force_draft))
 
     app.add_handler(CommandHandler("health", cmd_health))

@@ -17,17 +17,34 @@ def _now_ts() -> int:
     return int(time.time())
 
 
-def _ops_message(title: str, *, run_id: str, candidate_id: str, score: float, relevance: float, risk: float, has_url: bool, reason: str = "impact_candidate") -> str:
+def _ops_message(title: str, *, run_id: str, candidate_id: str, score: float, relevance: float, risk: float, has_url: bool, alternates: list[dict] | None = None, reason: str = "impact_candidate") -> str:
+    alt_lines = ""
+    if alternates:
+        rows = []
+        for i, a in enumerate(alternates[:3], start=1):
+            rows.append(
+                f"{i}) <code>{a.get('candidate_id','')}</code> · score <code>{float(a.get('total_score') or 0):.3f}</code> · rel <code>{float(a.get('relevance') or 0):.2f}</code>"
+            )
+        alt_lines = "\n<b>alternates:</b>\n" + "\n".join(rows)
+
+    hint = (
+        "\n\n<i>Para draft manual:</i> <code>/intraday_force_draft</code> (ganador)"
+        "\n<i>o:</i> <code>/intraday_force_draft &lt;candidate_id&gt;</code>"
+        "\n<i>o:</i> <code>/intraday_force_draft 1|2|3</code> (alternos)"
+    )
+
     return (
         "🚨 <b>Intraday Impact Candidate</b>\n"
         f"<b>title:</b> {title}\n"
         f"<b>run_id:</b> <code>{run_id}</code>\n"
-        f"<b>candidate_id:</b> <code>{candidate_id}</code>\n"
+        f"<b>winner:</b> <code>{candidate_id}</code>\n"
         f"<b>score:</b> <code>{score:.3f}</code>\n"
         f"<b>relevance:</b> <code>{relevance:.2f}</code>\n"
         f"<b>risk:</b> <code>{risk:.2f}</code>\n"
         f"<b>has_link:</b> <code>{'yes' if has_url else 'no'}</code>\n"
         f"<b>reason:</b> <code>{reason}</code>"
+        f"{alt_lines}"
+        f"{hint}"
     )
 
 
@@ -79,7 +96,7 @@ async def run_intraday_monitor() -> int:
         await _set_last('skip_cap_reached', {'reason': 'cap_reached', 'max_alerts_day': max_alerts_day, 'day': day})
         return 0
 
-    run_id, winner, _alts = await run_radar_x()
+    run_id, winner, alts = await run_radar_x()
 
     candidate_id = str(winner.get('candidate_id') or '')
     title = str(winner.get('title') or '').strip()[:180]
@@ -112,6 +129,19 @@ async def run_intraday_monitor() -> int:
             return 0
 
     # impact gate
+    alt_preview = []
+    for a in (alts or [])[:3]:
+        try:
+            sc = json.loads(a.get('scores_json') or '{}')
+        except Exception:
+            sc = {}
+        alt_preview.append({
+            'candidate_id': a.get('candidate_id'),
+            'title': str(a.get('title') or '')[:120],
+            'total_score': round(float(a.get('total_score') or 0.0), 3),
+            'relevance': round(float(sc.get('relevance') or 0.0), 2),
+        })
+
     base_detail = {
         'candidate_id': candidate_id,
         'title': title,
@@ -119,6 +149,7 @@ async def run_intraday_monitor() -> int:
         'relevance': round(relevance, 2),
         'risk': round(risk, 2),
         'has_url': has_url,
+        'alternates': alt_preview,
         'delta_score': round(total_score - min_score, 3),
         'delta_relevance': round(relevance - min_rel, 3),
         'delta_risk': round(max_risk - risk, 3),
@@ -168,6 +199,7 @@ async def run_intraday_monitor() -> int:
             relevance=relevance,
             risk=risk,
             has_url=has_url,
+            alternates=alt_preview,
         ),
     )
 
