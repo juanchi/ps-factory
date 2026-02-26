@@ -69,18 +69,66 @@ def _compose_publish_pack(post_id: str, ver: int, content: dict) -> str:
     e1 = "⚡ " if use_emojis else ""
     e2 = "🎯 " if use_emojis else ""
 
-    def _fit_x_limit(s: str, limit: int = 280) -> str:
-        s = (s or "").strip()
-        if len(s) <= limit:
-            return s
-        return s[: max(1, limit - 1)].rstrip() + "…"
+    def _to_sentences(s: str) -> list[str]:
+        raw = [x.strip() for x in s.replace("\n", " ").split(". ") if x.strip()]
+        out: list[str] = []
+        for item in raw:
+            t = item.strip()
+            if not t.endswith((".", "!", "?")):
+                t += "."
+            out.append(t)
+        return out
 
-    x_base = (
-        f"{e1}{hook}\n\n"
-        f"{caption[:220]}\n\n"
-        f"{tags}"
-    ).strip()
-    x_copy = _fit_x_limit(x_base, 280)
+    def _fit_x_summarized(hook_text: str, caption_text: str, tags_text: str, limit: int = 280) -> str:
+        lines: list[str] = []
+        if hook_text:
+            lines.append(f"{e1}{hook_text}".strip())
+
+        body_budget = limit - len("\n\n".join(lines + [tags_text])) - (2 if lines else 0)
+        body_budget = max(60, body_budget)
+
+        body = ""
+        for snt in _to_sentences(caption_text):
+            candidate = (body + " " + snt).strip() if body else snt
+            if len(candidate) <= body_budget:
+                body = candidate
+            else:
+                break
+
+        if not body:
+            words = caption_text.split()
+            acc = []
+            for w in words:
+                trial = (" ".join(acc + [w])).strip()
+                if len(trial) <= max(40, body_budget - 1):
+                    acc.append(w)
+                else:
+                    break
+            body = (" ".join(acc)).strip()
+            if body and not body.endswith((".", "!", "?")):
+                body += "."
+
+        if body:
+            lines.append(body)
+        if tags_text:
+            lines.append(tags_text)
+
+        text = "\n\n".join([x for x in lines if x]).strip()
+        if len(text) <= limit:
+            return text
+
+        # Final guard: trim body, keep hashtags intact
+        if tags_text:
+            head = f"{lines[0]}\n\n" if lines else ""
+            max_body = max(1, limit - len(head) - len("\n\n" + tags_text) - 1)
+            body2 = (body[:max_body]).rstrip()
+            if body2 and not body2.endswith((".", "!", "?")):
+                body2 += "…"
+            return f"{head}{body2}\n\n{tags_text}".strip()
+
+        return text[: limit - 1].rstrip() + "…"
+
+    x_copy = _fit_x_summarized(hook, caption, tags, 280)
 
     ig_copy = (
         f"{e1}{hook}\n\n"
