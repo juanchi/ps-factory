@@ -8,7 +8,7 @@ import logging
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.constants import ParseMode
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
 from telegram.error import BadRequest, NetworkError, TimedOut
@@ -163,6 +163,12 @@ def _compose_publish_pack(post_id: str, ver: int, content: dict) -> str:
         f"<b>Instagram</b>\n<code>{_e(b['instagram'])}</code>\n\n"
         f"<b>TikTok</b>\n<code>{_e(b['tiktok'])}</code>"
     )
+
+
+def _build_carousel_keyboard(post_id: str) -> InlineKeyboardMarkup:
+    rows = [[InlineKeyboardButton("✅ APROBAR CARRUSEL", callback_data=f"APPROVE:{post_id}")]]
+    rows.append([InlineKeyboardButton("📚 Versions", callback_data=f"VERSIONS:{post_id}")])
+    return InlineKeyboardMarkup(rows)
 
 
 def _extract_json(s: str) -> str:
@@ -1078,17 +1084,19 @@ Reglas:
     await log_event(post_id, "CAROUSEL_GEN", {"source": "telegram", "slides": len(slides)})
 
     drafts_chat_id = int(os.environ["TG_DRAFTS_CHAT_ID"])
-    await context.bot.send_message(
+    header_msg = await context.bot.send_message(
         chat_id=drafts_chat_id,
         text=(
             f"🧩 <b>CARRUSEL v1</b> — <code>{_e(post_id)}</code>\n"
             f"<b>Tema:</b> {_e(topic_out)}\n"
             f"<b>Slides:</b> <code>{len(slides)}</code>\n\n"
-            "<i>Fase 1:</i> guion + prompts por slide."
+            "<i>Fase 2:</i> imágenes se generan al aprobar (ahorro de costo en draft)."
         ),
         parse_mode=ParseMode.HTML,
         disable_web_page_preview=True,
+        reply_markup=_build_carousel_keyboard(post_id),
     )
+    await set_draft_message_ref(post_id, drafts_chat_id, header_msg.message_id)
 
     for i, s in enumerate(slides, start=1):
         title = _e(str(s.get("title") or f"Slide {i}"))
@@ -1301,6 +1309,119 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         latest = await get_latest_version(post_id)
         if latest:
             ver, content = latest
+
+            carousel_slides = (content or {}).get("carousel") or []
+            if isinstance(carousel_slides, list) and carousel_slides:
+                day_key = _utc_day_key()
+                img_day_counter_key = f"image:approve:day:{day_key}:count"
+                raw_day_count = await kv_get(img_day_counter_key)
+                try:
+                    day_count = int(raw_day_count or "0")
+                except Exception:
+                    day_count = 0
+
+                needed = min(6, len(carousel_slides)) if image_only_on_approve else 0
+                if image_only_on_approve and (day_count + needed) > max_images_per_day:
+                    await query.message.reply_text(
+                        "🟠 APPROVE CARRUSEL bloqueado: límite diario de imágenes alcanzado.",
+                        parse_mode=ParseMode.HTML,
+                    )
+                    await log_event(post_id, "APPROVE_BLOCKED_IMAGE_BUDGET", {"by": approver, "day": day_key, "count": day_count, "needed": needed})
+                    return
+
+                await context.bot.send_message(
+                    chat_id=approved_chat_id,
+                    text=f"✅ <b>CARRUSEL APROBADO</b> por: <code>{_e(approver)}</code>",
+                    parse_mode=ParseMode.HTML,
+                    disable_web_page_preview=True,
+                )
+
+                sent = None
+                generated = 0
+                if image_only_on_approve:
+                    await query.message.reply_text("🧩 Generando 6 imágenes del carrusel…", parse_mode=ParseMode.HTML)
+
+                    for idx, s in enumerate(carousel_slides[:6], start=1):
+                        title = str(s.get("title") or f"Slide {idx}").strip()
+                        body = str(s.get("body") or "").strip()
+                        visual_prompt = str(s.get("visual_prompt") or "").strip()
+                        prompt_src = visual_prompt or f"{title}. {body}"
+
+                        img_bytes = None
+                        img_mime = None
+                        last_reason = "unknown"
+
+                        for attempt in range(1, image_max_attempts + 1):
+                            try:
+                                bts, mime, _ = await asyncio.to_thread(
+                                    generate_image,
+                                    visual_prompt=prompt_src,
+                                    timeout_s=image_timeout_s,
+                                )
+                                ok45, w, h = validate_4_5(bts, mime)
+                                if ok45:
+                                    img_bytes, img_mime = bts, mime
+                                    break
+                                last_reason = f"bad_aspect:{w}x{h}"
+                            except Exception as e:
+                                last_reason = str(e)[:180]
+
+                        if not img_bytes:
+                            await query.message.reply_text(
+                                f"❌ Carrusel bloqueado en slide {idx}: no se pudo generar imagen 4:5.\n"
+                                f"<code>{_e(last_reason)}</code>",
+                                parse_mode=ParseMode.HTML,
+                            )
+                            await log_event(post_id, "APPROVE_BLOCKED_CAROUSEL", {"by": approver, "version": ver, "slide": idx, "reason": last_reason})
+                            return
+
+                        await context.bot.send_photo(chat_id=approved_chat_id, photo=img_bytes)
+                        sent = await context.bot.send_message(
+                            chat_id=approved_chat_id,
+                            text=(
+                                f"<b>Slide {idx}: {_e(title)}</b>\n\n"
+                                f"{_e(body)}"
+                            ),
+                            parse_mode=ParseMode.HTML,
+                            disable_web_page_preview=True,
+                        )
+                        generated += 1
+
+                    cap = str((content or {}).get("caption") or "").strip()
+                    if cap:
+                        sent = await context.bot.send_message(
+                            chat_id=approved_chat_id,
+                            text=f"📝 <b>Caption carrusel</b>\n{_e(cap)}",
+                            parse_mode=ParseMode.HTML,
+                            disable_web_page_preview=True,
+                        )
+
+                    await kv_set(img_day_counter_key, str(day_count + generated))
+                    await log_event(post_id, "APPROVE_CAROUSEL_OK", {"by": approver, "version": ver, "slides": generated, "day_count": day_count + generated})
+                else:
+                    # fallback textual only (rare)
+                    for idx, s in enumerate(carousel_slides[:6], start=1):
+                        title = str(s.get("title") or f"Slide {idx}").strip()
+                        body = str(s.get("body") or "").strip()
+                        sent = await context.bot.send_message(
+                            chat_id=approved_chat_id,
+                            text=f"<b>Slide {idx}: {_e(title)}</b>\n\n{_e(body)}",
+                            parse_mode=ParseMode.HTML,
+                        )
+
+                await approve_post(
+                    post_id=post_id,
+                    approver=approver,
+                    approved_chat_id=approved_chat_id,
+                    approved_message_id=(sent.message_id if sent else 0),
+                    approved_at=_now_ts(),
+                )
+                await log_event(post_id, "APPROVE", {"by": approver, "version": ver, "kind": "carousel"})
+
+                await query.edit_message_reply_markup(reply_markup=None)
+                await query.message.reply_text(f"✅ Carrusel aprobado por {approver} y enviado a PS | Aprobados.")
+                await kv_set(lock_key, "0")
+                return
 
             if image_only_on_approve:
                 day_key = _utc_day_key()
