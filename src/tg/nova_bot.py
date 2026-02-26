@@ -60,7 +60,6 @@ def _compose_publish_pack(post_id: str, ver: int, content: dict) -> str:
     hook = str(content.get("hook") or "").strip()
     explain = str(content.get("explain_simple") or "").strip()
     caption = str(content.get("caption") or "").strip()
-    anchor = str(content.get("bitcoin_anchor") or "").strip()
 
     use_emojis = os.getenv("SOCIAL_USE_EMOJIS", "1").strip().lower() in {"1", "true", "yes", "on"}
     brand_tag = os.getenv("SOCIAL_BRAND_HASHTAG", "#PanamáSoberano").strip() or "#PanamáSoberano"
@@ -68,28 +67,25 @@ def _compose_publish_pack(post_id: str, ver: int, content: dict) -> str:
     tags = " ".join([t for t in [brand_tag, second_tag] if t]).strip()
 
     e1 = "⚡ " if use_emojis else ""
-    e2 = "📌 " if use_emojis else ""
-    e3 = "🎯 " if use_emojis else ""
+    e2 = "🎯 " if use_emojis else ""
 
     x_copy = (
         f"{e1}{hook}\n\n"
-        f"{caption[:180]}\n\n"
-        f"{e2}{anchor[:140]}\n"
+        f"{caption[:220]}\n\n"
         f"{tags}"
     ).strip()
 
     ig_copy = (
         f"{e1}{hook}\n\n"
-        f"{explain[:280]}\n\n"
-        f"{e2}{anchor[:180]}\n\n"
-        f"{e3}{caption[:180]}\n\n"
+        f"{explain[:320]}\n\n"
+        f"{e2}{caption[:180]}\n\n"
         f"{tags}"
     ).strip()
 
     tiktok_copy = (
         f"{e1}{hook}\n"
         f"{explain[:180]}\n\n"
-        f"{e3}{caption[:140]}\n"
+        f"{e2}{caption[:140]}\n"
         f"{tags}"
     ).strip()
 
