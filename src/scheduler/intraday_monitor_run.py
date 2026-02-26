@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
-from telegram import Bot
+from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 
 from radar.engine import run_radar_x
@@ -64,10 +64,28 @@ def _parse_ts_iso(s: str | None) -> int | None:
         return None
 
 
-async def _notify(bot: Bot, chat_id: int | None, text: str) -> None:
+def _intraday_ops_keyboard(alternates: list[dict] | None = None) -> InlineKeyboardMarkup:
+    rows = [[InlineKeyboardButton("✅ Draft ganador", callback_data="IDF:W")]]
+    alts = alternates or []
+    if alts:
+        alt_row = []
+        for i in range(1, min(3, len(alts)) + 1):
+            alt_row.append(InlineKeyboardButton(f"⚡ Alt {i}", callback_data=f"IDF:{i}"))
+        if alt_row:
+            rows.append(alt_row)
+    return InlineKeyboardMarkup(rows)
+
+
+async def _notify(bot: Bot, chat_id: int | None, text: str, *, alternates: list[dict] | None = None) -> None:
     if not chat_id:
         return
-    await bot.send_message(chat_id=chat_id, text=text, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+    await bot.send_message(
+        chat_id=chat_id,
+        text=text,
+        parse_mode=ParseMode.HTML,
+        disable_web_page_preview=True,
+        reply_markup=_intraday_ops_keyboard(alternates),
+    )
 
 
 async def _set_last(result: str, detail: dict) -> None:
@@ -153,6 +171,7 @@ async def run_intraday_monitor() -> int:
                         has_url=has_url,
                         reason='stale_candidate',
                     ),
+                    alternates=[],
                 )
             return 0
 
@@ -200,6 +219,7 @@ async def run_intraday_monitor() -> int:
                 alternates=alt_preview,
                 reason=reason,
             ),
+            alternates=alt_preview,
         )
 
     if total_score < min_score:
@@ -255,6 +275,7 @@ async def run_intraday_monitor() -> int:
             has_url=has_url,
             alternates=alt_preview,
         ),
+        alternates=alt_preview,
     )
 
     await kv_set(cd_key, str(_now_ts()))
