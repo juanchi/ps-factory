@@ -55,8 +55,7 @@ def _utc_day_key() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%d")
 
 
-def _compose_publish_pack(post_id: str, ver: int, content: dict) -> str:
-    topic = str(content.get("topic") or "POST")
+def _compose_publish_blocks(content: dict) -> dict:
     hook = str(content.get("hook") or "").strip()
     explain = str(content.get("explain_simple") or "").strip()
     caption = str(content.get("caption") or "").strip()
@@ -83,15 +82,9 @@ def _compose_publish_pack(post_id: str, ver: int, content: dict) -> str:
         txt = " ".join((s or "").replace("\n", " ").split())
         if not txt:
             return []
-
-        protected = {
-            "EE. UU.": "EEUU",
-            "p. ej.": "pej",
-            "etc.": "etc",
-        }
+        protected = {"EE. UU.": "EEUU", "p. ej.": "pej", "etc.": "etc"}
         for k, v in protected.items():
             txt = txt.replace(k, v)
-
         import re
         parts = [p.strip() for p in re.split(r"(?<=[.!?])\s+", txt) if p.strip()]
         out: list[str] = []
@@ -111,60 +104,46 @@ def _compose_publish_pack(post_id: str, ver: int, content: dict) -> str:
                 selected.append(snt)
             else:
                 break
-        if selected:
-            return " ".join(selected).strip()
-        return _word_clip(s, limit)
+        return " ".join(selected).strip() if selected else _word_clip(s, limit)
 
     def _fit_x_summarized(hook_text: str, explain_text: str, caption_text: str, tags_text: str, limit: int = 280) -> str:
         lines: list[str] = []
         if hook_text:
             lines.append(f"{e1}{hook_text}".strip())
-
-        body_budget = limit - len("\n\n".join(lines + [tags_text])) - (2 if lines else 0)
-        body_budget = max(70, body_budget)
-
-        source = f"{explain_text} {caption_text}".strip()
-        body = _summarize_sentences(source, body_budget, max_sentences=2)
-
+        body_budget = max(70, limit - len("\n\n".join(lines + [tags_text])) - (2 if lines else 0))
+        body = _summarize_sentences(f"{explain_text} {caption_text}".strip(), body_budget, max_sentences=2)
         if body:
             lines.append(body)
         if tags_text:
             lines.append(tags_text)
-
         text = "\n\n".join([x for x in lines if x]).strip()
-        if len(text) <= limit:
-            return text
+        return _word_clip(text, limit) if len(text) > limit else text
 
-        # Final guard: trim body, keep hashtags intact
-        if tags_text and len(lines) >= 2:
-            head = f"{lines[0]}\n\n"
-            max_body = max(1, limit - len(head) - len("\n\n" + tags_text))
-            body2 = _word_clip(lines[1], max_body)
-            return f"{head}{body2}\n\n{tags_text}".strip()
+    return {
+        "x": _fit_x_summarized(hook, explain, caption, tags, 280),
+        "instagram": (
+            f"{e1}{hook}\n\n"
+            f"{_summarize_sentences(explain, 360, max_sentences=3)}\n\n"
+            f"{e2}{_summarize_sentences(caption, 200, max_sentences=2)}\n\n"
+            f"{tags}"
+        ).strip(),
+        "tiktok": (
+            f"{e1}{hook}\n"
+            f"{_summarize_sentences(explain, 190, max_sentences=2)}\n\n"
+            f"{e2}{_summarize_sentences(caption, 150, max_sentences=1)}\n"
+            f"{tags}"
+        ).strip(),
+    }
 
-        return _word_clip(text, limit)
 
-    x_copy = _fit_x_summarized(hook, explain, caption, tags, 280)
-
-    ig_copy = (
-        f"{e1}{hook}\n\n"
-        f"{_summarize_sentences(explain, 360, max_sentences=3)}\n\n"
-        f"{e2}{_summarize_sentences(caption, 200, max_sentences=2)}\n\n"
-        f"{tags}"
-    ).strip()
-
-    tiktok_copy = (
-        f"{e1}{hook}\n"
-        f"{_summarize_sentences(explain, 190, max_sentences=2)}\n\n"
-        f"{e2}{_summarize_sentences(caption, 150, max_sentences=1)}\n"
-        f"{tags}"
-    ).strip()
-
+def _compose_publish_pack(post_id: str, ver: int, content: dict) -> str:
+    topic = str(content.get("topic") or "POST")
+    b = _compose_publish_blocks(content)
     return (
         f"🟠 <b>{_e(topic)}</b> — <code>{_e(post_id)}</code> · v{ver}\n\n"
-        f"<b>X</b>\n<code>{_e(x_copy)}</code>\n\n"
-        f"<b>Instagram</b>\n<code>{_e(ig_copy)}</code>\n\n"
-        f"<b>TikTok</b>\n<code>{_e(tiktok_copy)}</code>"
+        f"<b>X</b>\n<code>{_e(b['x'])}</code>\n\n"
+        f"<b>Instagram</b>\n<code>{_e(b['instagram'])}</code>\n\n"
+        f"<b>TikTok</b>\n<code>{_e(b['tiktok'])}</code>"
     )
 
 
@@ -236,6 +215,104 @@ async def _safe_reply(update: Update, text: str, *, tries: int = 3) -> None:
             await asyncio.sleep(1.2)
     if last:
         raise last
+
+
+def _split_telegram_chunks(text: str, max_len: int = 1800) -> list[str]:
+    t = str(text or "")
+    if len(t) <= max_len:
+        return [t]
+    parts = t.split("\n\n")
+    out: list[str] = []
+    cur = ""
+    for p in parts:
+        cand = (cur + "\n\n" + p).strip() if cur else p
+        if len(cand) <= max_len:
+            cur = cand
+        else:
+            if cur:
+                out.append(cur)
+            if len(p) <= max_len:
+                cur = p
+            else:
+                i = 0
+                while i < len(p):
+                    out.append(p[i:i+max_len])
+                    i += max_len
+                cur = ""
+    if cur:
+        out.append(cur)
+    return out or [t[:max_len]]
+
+
+async def _send_draft_payload(
+    context: ContextTypes.DEFAULT_TYPE,
+    *,
+    chat_id: int,
+    post_id: str,
+    version: int,
+    post: dict,
+    candidate_ids: list[str],
+):
+    split_on = os.getenv("TG_SPLIT_DRAFT_SECTIONS", "1").strip().lower() in {"1", "true", "yes", "on"}
+    full = render_post_html(post_id, version, post)
+    if not split_on:
+        return await context.bot.send_message(
+            chat_id=chat_id,
+            text=full,
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True,
+            reply_markup=build_post_keyboard(post_id, candidate_ids=candidate_ids),
+        )
+
+    chunks = _split_telegram_chunks(full, max_len=1700)
+    first = await context.bot.send_message(
+        chat_id=chat_id,
+        text=chunks[0],
+        parse_mode=ParseMode.HTML,
+        disable_web_page_preview=True,
+        reply_markup=build_post_keyboard(post_id, candidate_ids=candidate_ids),
+    )
+    for ch in chunks[1:]:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=ch,
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True,
+        )
+    return first
+
+
+async def _send_approved_payload(
+    context: ContextTypes.DEFAULT_TYPE,
+    *,
+    chat_id: int,
+    post_id: str,
+    version: int,
+    post: dict,
+):
+    split_on = os.getenv("TG_SPLIT_APPROVED_BY_NETWORK", "1").strip().lower() in {"1", "true", "yes", "on"}
+    if not split_on:
+        return await context.bot.send_message(
+            chat_id=chat_id,
+            text=_compose_publish_pack(post_id, version, post),
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True,
+        )
+
+    topic = str(post.get("topic") or "POST")
+    blocks = _compose_publish_blocks(post)
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=f"🟠 <b>{_e(topic)}</b> — <code>{_e(post_id)}</code> · v{version}",
+        parse_mode=ParseMode.HTML,
+        disable_web_page_preview=True,
+    )
+    await context.bot.send_message(chat_id=chat_id, text="<b>X</b>", parse_mode=ParseMode.HTML)
+    await context.bot.send_message(chat_id=chat_id, text=f"<code>{_e(blocks['x'])}</code>", parse_mode=ParseMode.HTML)
+    await context.bot.send_message(chat_id=chat_id, text="<b>Instagram</b>", parse_mode=ParseMode.HTML)
+    await context.bot.send_message(chat_id=chat_id, text=f"<code>{_e(blocks['instagram'])}</code>", parse_mode=ParseMode.HTML)
+    await context.bot.send_message(chat_id=chat_id, text="<b>TikTok</b>", parse_mode=ParseMode.HTML)
+    return await context.bot.send_message(chat_id=chat_id, text=f"<code>{_e(blocks['tiktok'])}</code>", parse_mode=ParseMode.HTML)
 
 
 async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -451,12 +528,13 @@ async def cmd_demo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await add_version(post_id=post_id, version=1, content=post)
     await log_event(post_id, "DEMO", {"source": "telegram"})
 
-    msg = await context.bot.send_message(
+    msg = await _send_draft_payload(
+        context,
         chat_id=drafts_chat_id,
-        text=render_post_html(post_id, 1, post),
-        parse_mode=ParseMode.HTML,
-        disable_web_page_preview=True,
-        reply_markup=build_post_keyboard(post_id, candidate_ids=[]),
+        post_id=post_id,
+        version=1,
+        post=post,
+        candidate_ids=[],
     )
     await set_draft_message_ref(post_id, drafts_chat_id, msg.message_id)
     await update.message.reply_text("Listo ✅ Mandé un post demo a PS | Drafts.", parse_mode=ParseMode.HTML)
@@ -630,12 +708,13 @@ async def cmd_radar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await log_event(post_id, "RADAR_GEN", {"run_id": run_id, "winner": winner_id, "alts": alt_ids})
 
     # IMPORTANT: candidate_ids aquí son candidate_id reales ("x:....")
-    msg = await context.bot.send_message(
+    msg = await _send_draft_payload(
+        context,
         chat_id=drafts_chat_id,
-        text=render_post_html(post_id, 1, post),
-        parse_mode=ParseMode.HTML,
-        disable_web_page_preview=True,
-        reply_markup=build_post_keyboard(post_id, candidate_ids=alt_ids),
+        post_id=post_id,
+        version=1,
+        post=post,
+        candidate_ids=alt_ids,
     )
     await set_draft_message_ref(post_id, drafts_chat_id, msg.message_id)
 
@@ -797,12 +876,13 @@ async def cmd_intraday_force_draft(update: Update, context: ContextTypes.DEFAULT
     await add_version(post_id, 1, post)
     await log_event(post_id, "INTRADAY_FORCE_DRAFT", {"candidate_id": candidate_id})
 
-    msg = await context.bot.send_message(
+    msg = await _send_draft_payload(
+        context,
         chat_id=drafts_chat_id,
-        text=render_post_html(post_id, 1, post),
-        parse_mode=ParseMode.HTML,
-        disable_web_page_preview=True,
-        reply_markup=build_post_keyboard(post_id, candidate_ids=[]),
+        post_id=post_id,
+        version=1,
+        post=post,
+        candidate_ids=[],
     )
     await set_draft_message_ref(post_id, drafts_chat_id, msg.message_id)
 
@@ -868,12 +948,13 @@ async def cmd_intraday_force_draft(update: Update, context: ContextTypes.DEFAULT
         await update.message.reply_text("❌ TG_DRAFTS_CHAT_ID no está configurado.")
         return
 
-    msg = await context.bot.send_message(
+    msg = await _send_draft_payload(
+        context,
         chat_id=drafts_chat_id,
-        text=render_post_html(post_id, 1, post),
-        parse_mode=ParseMode.HTML,
-        disable_web_page_preview=True,
-        reply_markup=build_post_keyboard(post_id, candidate_ids=alt_ids),
+        post_id=post_id,
+        version=1,
+        post=post,
+        candidate_ids=alt_ids,
     )
     await set_draft_message_ref(post_id, drafts_chat_id, msg.message_id)
 
@@ -937,12 +1018,13 @@ Responde SOLO el JSON.
     await log_event(post_id, "GEN", {"source": "telegram"})
 
     drafts_chat_id = int(os.environ["TG_DRAFTS_CHAT_ID"])
-    msg = await context.bot.send_message(
+    msg = await _send_draft_payload(
+        context,
         chat_id=drafts_chat_id,
-        text=render_post_html(post_id, 1, post),
-        parse_mode=ParseMode.HTML,
-        disable_web_page_preview=True,
-        reply_markup=build_post_keyboard(post_id, candidate_ids=[]),
+        post_id=post_id,
+        version=1,
+        post=post,
+        candidate_ids=[],
     )
 
     await set_draft_message_ref(post_id, drafts_chat_id, msg.message_id)
@@ -1179,11 +1261,12 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     caption=f"✅ <b>APROBADO</b> por: <code>{_e(approver)}</code>",
                     parse_mode=ParseMode.HTML,
                 )
-                sent = await context.bot.send_message(
+                sent = await _send_approved_payload(
+                    context,
                     chat_id=approved_chat_id,
-                    text=_compose_publish_pack(post_id, ver, content),
-                    parse_mode=ParseMode.HTML,
-                    disable_web_page_preview=True,
+                    post_id=post_id,
+                    version=ver,
+                    post=content,
                 )
                 await kv_set(img_day_counter_key, str(day_count + 1))
                 await log_event(
@@ -1192,11 +1275,18 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     {"by": approver, "version": ver, "mime": img_mime, "provider_prompt": provider_prompt[:500], "photo_message_id": photo_msg.message_id, "day_count": day_count + 1},
                 )
             else:
-                sent = await context.bot.send_message(
+                await context.bot.send_message(
                     chat_id=approved_chat_id,
-                    text=f"✅ <b>APROBADO</b> por: <code>{_e(approver)}</code>\n\n" + _compose_publish_pack(post_id, ver, content),
+                    text=f"✅ <b>APROBADO</b> por: <code>{_e(approver)}</code>",
                     parse_mode=ParseMode.HTML,
                     disable_web_page_preview=True,
+                )
+                sent = await _send_approved_payload(
+                    context,
+                    chat_id=approved_chat_id,
+                    post_id=post_id,
+                    version=ver,
+                    post=content,
                 )
 
             await approve_post(
