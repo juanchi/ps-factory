@@ -69,11 +69,18 @@ def _compose_publish_pack(post_id: str, ver: int, content: dict) -> str:
     e1 = "⚡ " if use_emojis else ""
     e2 = "🎯 " if use_emojis else ""
 
-    x_copy = (
+    def _fit_x_limit(s: str, limit: int = 280) -> str:
+        s = (s or "").strip()
+        if len(s) <= limit:
+            return s
+        return s[: max(1, limit - 1)].rstrip() + "…"
+
+    x_base = (
         f"{e1}{hook}\n\n"
         f"{caption[:220]}\n\n"
         f"{tags}"
     ).strip()
+    x_copy = _fit_x_limit(x_base, 280)
 
     ig_copy = (
         f"{e1}{hook}\n\n"

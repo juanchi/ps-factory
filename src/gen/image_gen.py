@@ -90,8 +90,8 @@ def _apply_watermark_if_enabled(data: bytes, mime: str) -> Tuple[bytes, str]:
         return data, mime
 
     text = os.getenv("IMAGE_WATERMARK_TEXT", "Panamá Soberano").strip() or "Panamá Soberano"
-    position = os.getenv("IMAGE_WATERMARK_POSITION", "bottom_right").strip().lower()
-    opacity_raw = os.getenv("IMAGE_WATERMARK_OPACITY", "0.35").strip()
+    position = os.getenv("IMAGE_WATERMARK_POSITION", "center").strip().lower()
+    opacity_raw = os.getenv("IMAGE_WATERMARK_OPACITY", "0.55").strip()
     try:
         opacity = max(0.05, min(1.0, float(opacity_raw)))
     except Exception:
@@ -109,7 +109,7 @@ def _apply_watermark_if_enabled(data: bytes, mime: str) -> Tuple[bytes, str]:
         overlay = Image.new("RGBA", im.size, (0, 0, 0, 0))
         draw = ImageDraw.Draw(overlay)
 
-        base_size = max(16, int(min(w, h) * 0.03))
+        base_size = max(22, int(min(w, h) * 0.045))
         try:
             font = ImageFont.truetype("DejaVuSans-Bold.ttf", base_size)
         except Exception:
@@ -126,11 +126,18 @@ def _apply_watermark_if_enabled(data: bytes, mime: str) -> Tuple[bytes, str]:
             x, y = w - tw - margin, margin
         elif position == "top_left":
             x, y = margin, margin
+        elif position == "center":
+            x, y = (w - tw) // 2, (h - th) // 2
         else:
             x, y = w - tw - margin, h - th - margin
 
+        # add subtle background plate to improve readability
+        pad = max(8, int(base_size * 0.35))
+        plate = (x - pad, y - pad, x + tw + pad, y + th + pad)
+        draw.rounded_rectangle(plate, radius=max(8, int(base_size * 0.35)), fill=(0, 0, 0, int(255 * opacity * 0.35)))
+
         # soft shadow + text
-        draw.text((x + 1, y + 1), text, font=font, fill=(0, 0, 0, int(255 * opacity * 0.65)))
+        draw.text((x + 2, y + 2), text, font=font, fill=(0, 0, 0, int(255 * 0.75)))
         draw.text((x, y), text, font=font, fill=(255, 255, 255, int(255 * opacity)))
 
         out = Image.alpha_composite(im, overlay)
