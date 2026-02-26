@@ -177,13 +177,22 @@ async def run_radar_x() -> Tuple[str, Dict, List[Dict]]:
     # top 4 (1 winner + 3 alternos)
     top4 = scored[:4]
 
-    # Si no hubo tweets nuevos en ventana, caemos al último run guardado
-    if not top4:
-        last_run = await kv_get("radar_last_run_id")
-        if last_run:
-            prev = await list_radar_candidates_by_run(last_run)
-            prev.sort(key=lambda c: c["total_score"], reverse=True)
-            top4 = prev[:4]
+    # Fallback/fill desde el último run para siempre tener hasta 4 opciones
+    # (sin costo extra de API X). Si hay pocos nuevos, completamos con previos.
+    last_run = await kv_get("radar_last_run_id")
+    if (not top4 or len(top4) < 4) and last_run:
+        prev = await list_radar_candidates_by_run(last_run)
+        prev.sort(key=lambda c: c["total_score"], reverse=True)
+
+        seen = {c.get("candidate_id") for c in top4}
+        for p in prev:
+            cid = p.get("candidate_id")
+            if cid in seen:
+                continue
+            top4.append(p)
+            seen.add(cid)
+            if len(top4) >= 4:
+                break
 
     if not top4:
         raise RuntimeError("Radar no encontró candidatos (ni nuevos ni previos).")
