@@ -823,18 +823,87 @@ async def cmd_intraday_now(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     extra += "\n\n<i>Si igual lo quieres, usa:</i> <code>/intraday_force_draft</code>"
     extra += "\n<i>Alterno específico:</i> <code>/intraday_force_draft 1|2|3</code> o <code>/intraday_force_draft &lt;candidate_id&gt;</code>"
 
+    kb_rows = [[InlineKeyboardButton("✅ Draft ganador", callback_data="IDF:W")]]
+    if alternates:
+        r = []
+        for i in range(1, min(3, len(alternates)) + 1):
+            r.append(InlineKeyboardButton(f"⚡ Alt {i}", callback_data=f"IDF:{i}"))
+        if r:
+            kb_rows.append(r)
+
     await update.message.reply_text(
         "✅ Intraday monitor ejecutado.\n\n"
         f"<b>resultado:</b> <code>{_e(human_reason)}</code>\n"
         f"<b>ts:</b> <code>{(last_ts or 'n/a')[:40]}</code>"
         f"{extra}",
         parse_mode=ParseMode.HTML,
+        reply_markup=InlineKeyboardMarkup(kb_rows),
+    )
+
+
+async def _intraday_force_candidate_to_draft(
+    context: ContextTypes.DEFAULT_TYPE,
+    *,
+    candidate_id: str,
+    reply_fn,
+) -> None:
+    drafts_chat_id = int(os.getenv("TG_DRAFTS_CHAT_ID", "0") or 0)
+    if not drafts_chat_id:
+        await reply_fn("❌ TG_DRAFTS_CHAT_ID no está configurado.")
+        return
+
+    cand = await get_radar_candidate(candidate_id)
+    if not cand:
+        await reply_fn(f"❌ candidate_id no encontrado: <code>{_e(candidate_id)}</code>", parse_mode=ParseMode.HTML)
+        return
+
+    await reply_fn(
+        f"🛠 Forzando Draft desde intraday candidate <code>{_e(candidate_id)}</code>...",
+        parse_mode=ParseMode.HTML,
+    )
+
+    prompt = await _prompt_from_candidate(cand)
+    raw = openclaw_chat(prompt)
+
+    try:
+        post = json.loads(_extract_json(raw))
+    except Exception:
+        await reply_fn("❌ El modelo no devolvió JSON válido.")
+        return
+
+    post_id = f"intraday-{_now_ts()}"
+    post["post_id"] = post_id
+    post["topic"] = str(post.get("topic") or "Intraday manual override")
+    post["radar_selected_candidate_id"] = candidate_id
+    post["radar_winner_candidate_id"] = candidate_id
+    post["radar_winner_preview"] = _candidate_preview(cand)
+    post["radar_alternate_candidate_ids"] = []
+    post["radar_alternate_previews"] = []
+
+    await create_post(post_id, post["topic"], post.get("bitcoin_anchor") or "")
+    await add_version(post_id, 1, post)
+    await log_event(post_id, "INTRADAY_FORCE_DRAFT", {"candidate_id": candidate_id})
+
+    msg = await _send_draft_payload(
+        context,
+        chat_id=drafts_chat_id,
+        post_id=post_id,
+        version=1,
+        post=post,
+        candidate_ids=[],
+    )
+    await set_draft_message_ref(post_id, drafts_chat_id, msg.message_id)
+
+    await reply_fn(
+        "✅ Draft forzado enviado a Drafts.\n\n"
+        f"<b>post_id:</b> <code>{_e(post_id)}</code>\n"
+        f"<b>candidate_id:</b> <code>{_e(candidate_id)}</code>",
+        parse_mode=ParseMode.HTML,
     )
 
 
 async def cmd_intraday_force_draft(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     ops_chat_id = int(os.getenv("TG_OPS_CHAT_ID", "0") or 0)
-    drafts_chat_id = int(os.getenv("TG_DRAFTS_CHAT_ID", "0") or 0)
     effective_chat = update.effective_chat.id if update.effective_chat else 0
 
     if ops_chat_id and int(effective_chat) != ops_chat_id:
@@ -866,54 +935,7 @@ async def cmd_intraday_force_draft(update: Update, context: ContextTypes.DEFAULT
         await update.message.reply_text("❌ No tengo candidate_id reciente. Ejecuta /intraday_now primero.")
         return
 
-    cand = await get_radar_candidate(candidate_id)
-    if not cand:
-        await update.message.reply_text(f"❌ candidate_id no encontrado: <code>{_e(candidate_id)}</code>", parse_mode=ParseMode.HTML)
-        return
-
-    await update.message.reply_text(
-        f"🛠 Forzando Draft desde intraday candidate <code>{_e(candidate_id)}</code>...",
-        parse_mode=ParseMode.HTML,
-    )
-
-    prompt = await _prompt_from_candidate(cand)
-    raw = openclaw_chat(prompt)
-
-    try:
-        post = json.loads(_extract_json(raw))
-    except Exception:
-        await update.message.reply_text("❌ El modelo no devolvió JSON válido.")
-        return
-
-    post_id = f"intraday-{_now_ts()}"
-    post["post_id"] = post_id
-    post["topic"] = str(post.get("topic") or "Intraday manual override")
-    post["radar_selected_candidate_id"] = candidate_id
-    post["radar_winner_candidate_id"] = candidate_id
-    post["radar_winner_preview"] = _candidate_preview(cand)
-    post["radar_alternate_candidate_ids"] = []
-    post["radar_alternate_previews"] = []
-
-    await create_post(post_id, post["topic"], post.get("bitcoin_anchor") or "")
-    await add_version(post_id, 1, post)
-    await log_event(post_id, "INTRADAY_FORCE_DRAFT", {"candidate_id": candidate_id})
-
-    msg = await _send_draft_payload(
-        context,
-        chat_id=drafts_chat_id,
-        post_id=post_id,
-        version=1,
-        post=post,
-        candidate_ids=[],
-    )
-    await set_draft_message_ref(post_id, drafts_chat_id, msg.message_id)
-
-    await update.message.reply_text(
-        "✅ Draft forzado enviado a Drafts.\n\n"
-        f"<b>post_id:</b> <code>{_e(post_id)}</code>\n"
-        f"<b>candidate_id:</b> <code>{_e(candidate_id)}</code>",
-        parse_mode=ParseMode.HTML,
-    )
+    await _intraday_force_candidate_to_draft(context, candidate_id=candidate_id, reply_fn=update.message.reply_text)
 
 
 async def cmd_gen(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -985,6 +1007,31 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await query.answer()
 
     data = query.data or ""
+
+    if data.startswith("IDF:"):
+        sel = data.split(":", 1)[1].strip().upper()
+        raw = await kv_get("intraday:last_detail")
+        try:
+            d = json.loads(raw or "{}")
+        except Exception:
+            d = {}
+
+        candidate_id = ""
+        if sel == "W":
+            candidate_id = str(d.get("candidate_id") or "").strip()
+        elif sel in {"1", "2", "3"}:
+            alts = d.get("alternates") or []
+            try:
+                candidate_id = str((alts[int(sel)-1] or {}).get("candidate_id") or "").strip()
+            except Exception:
+                candidate_id = ""
+
+        if not candidate_id:
+            await query.message.reply_text("❌ No hay candidate_id disponible para esa opción.", parse_mode=ParseMode.HTML)
+            return
+
+        await _intraday_force_candidate_to_draft(context, candidate_id=candidate_id, reply_fn=query.message.reply_text)
+        return
 
     if data.startswith("VERSIONS:"):
         post_id = data.split(":", 1)[1]
