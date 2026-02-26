@@ -1025,7 +1025,7 @@ Responde SOLO el JSON.
 async def cmd_carousel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     topic = " ".join(context.args).strip()
     if not topic:
-        await update.message.reply_text("Uso: <code>/carousel &lt;tema&gt;</code>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text("Uso: <code>/carousel &lt;tema&gt;</code> o <code>/carrusel &lt;tema&gt;</code>", parse_mode=ParseMode.HTML)
         return
 
     await update.message.reply_text("🧩 Generando carrusel (fase 1)...", parse_mode=ParseMode.HTML)
@@ -1084,7 +1084,7 @@ Reglas:
     await log_event(post_id, "CAROUSEL_GEN", {"source": "telegram", "slides": len(slides)})
 
     drafts_chat_id = int(os.environ["TG_DRAFTS_CHAT_ID"])
-    header_msg = await context.bot.send_message(
+    await context.bot.send_message(
         chat_id=drafts_chat_id,
         text=(
             f"🧩 <b>CARRUSEL v1</b> — <code>{_e(post_id)}</code>\n"
@@ -1094,9 +1094,7 @@ Reglas:
         ),
         parse_mode=ParseMode.HTML,
         disable_web_page_preview=True,
-        reply_markup=_build_carousel_keyboard(post_id),
     )
-    await set_draft_message_ref(post_id, drafts_chat_id, header_msg.message_id)
 
     for i, s in enumerate(slides, start=1):
         title = _e(str(s.get("title") or f"Slide {i}"))
@@ -1121,7 +1119,15 @@ Reglas:
             disable_web_page_preview=True,
         )
 
-    await update.message.reply_text("✅ Carrusel enviado a Drafts (fase 1).", parse_mode=ParseMode.HTML)
+    ctrl_msg = await context.bot.send_message(
+        chat_id=drafts_chat_id,
+        text="✅ <b>Control de carrusel</b> (usar al final)",
+        parse_mode=ParseMode.HTML,
+        reply_markup=_build_carousel_keyboard(post_id),
+    )
+    await set_draft_message_ref(post_id, drafts_chat_id, ctrl_msg.message_id)
+
+    await update.message.reply_text("✅ Carrusel enviado a Drafts (fase 2).", parse_mode=ParseMode.HTML)
 
 
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1314,6 +1320,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             if isinstance(carousel_slides, list) and carousel_slides:
                 day_key = _utc_day_key()
                 img_day_counter_key = f"image:approve:day:{day_key}:count"
+                carousel_day_limit = int(os.getenv("IMAGE_MAX_APPROVE_PER_DAY_CAROUSEL", str(max_images_per_day)))
                 raw_day_count = await kv_get(img_day_counter_key)
                 try:
                     day_count = int(raw_day_count or "0")
@@ -1321,12 +1328,13 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     day_count = 0
 
                 needed = min(6, len(carousel_slides)) if image_only_on_approve else 0
-                if image_only_on_approve and (day_count + needed) > max_images_per_day:
+                if image_only_on_approve and (day_count + needed) > carousel_day_limit:
                     await query.message.reply_text(
-                        "🟠 APPROVE CARRUSEL bloqueado: límite diario de imágenes alcanzado.",
+                        "🟠 APPROVE CARRUSEL bloqueado: límite diario de imágenes alcanzado.\n"
+                        f"<b>limit:</b> <code>{carousel_day_limit}</code> · <b>used:</b> <code>{day_count}</code> · <b>needed:</b> <code>{needed}</code>",
                         parse_mode=ParseMode.HTML,
                     )
-                    await log_event(post_id, "APPROVE_BLOCKED_IMAGE_BUDGET", {"by": approver, "day": day_key, "count": day_count, "needed": needed})
+                    await log_event(post_id, "APPROVE_BLOCKED_IMAGE_BUDGET", {"by": approver, "day": day_key, "count": day_count, "needed": needed, "limit": carousel_day_limit})
                     return
 
                 await context.bot.send_message(
@@ -1758,6 +1766,7 @@ def main() -> None:
     app.add_handler(CommandHandler("demo", cmd_demo))
     app.add_handler(CommandHandler("gen", cmd_gen))
     app.add_handler(CommandHandler("carousel", cmd_carousel))
+    app.add_handler(CommandHandler("carrusel", cmd_carousel))
     app.add_handler(CommandHandler("radar", cmd_radar))
     app.add_handler(CommandHandler("intraday_now", cmd_intraday_now))
     app.add_handler(CommandHandler("intraday_force_draft", cmd_intraday_force_draft))
