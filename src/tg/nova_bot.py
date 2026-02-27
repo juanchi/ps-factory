@@ -1053,16 +1053,20 @@ Return ONLY valid JSON in this exact format:
 {{
   "carousel": {{
     "topic": "main topic",
+    "slide_count": 4,
     "slides": [
       {{"n": 1, "role": "hook", "text": "..."}},
       {{"n": 2, "role": "development", "text": "..."}},
       {{"n": 3, "role": "development", "text": "..."}},
-      {{"n": 4, "role": "development", "text": "..."}},
-      {{"n": 5, "role": "climax", "text": "..."}},
-      {{"n": 6, "role": "cta", "text": "..."}}
+      {{"n": 4, "role": "cta", "text": "..."}}
     ]
-  }}
+  }},
+  "caption": "texto humano y conversacional para acompañar el carrusel"
 }}
+Additional strict rules:
+- choose slide_count dynamically between 4 and 10 according to topic complexity
+- do NOT include labels like 'Hook', 'Desarrollo', 'Climax', 'CTA' inside slide text
+- do NOT include numbering references inside slide text (no 1/6, slide 1, etc.)
 No markdown. No explanations. No extra text.
 """.strip()
 
@@ -1102,13 +1106,25 @@ No markdown. No explanations. No extra text.
         await update.message.reply_text("❌ Carrusel inválido: slides sin texto.", parse_mode=ParseMode.HTML)
         return
 
+    requested_count = None
+    if isinstance(payload, dict):
+        try:
+            requested_count = int(payload.get("slide_count")) if payload.get("slide_count") is not None else None
+        except Exception:
+            requested_count = None
+
     min_slides = int(os.getenv("CAROUSEL_MIN_SLIDES", "4"))
     max_slides = int(os.getenv("CAROUSEL_MAX_SLIDES", "10"))
     if max_slides < min_slides:
         max_slides = min_slides
 
-    # dynamic slide count from model output, clamped by env
-    slides = slides[:max_slides]
+    # dynamic slide count from model output (+ env limits)
+    target_count = requested_count if requested_count is not None else len(slides)
+    if target_count <= 0:
+        target_count = len(slides)
+    target_count = max(min_slides, min(max_slides, target_count))
+
+    slides = slides[:target_count]
     if len(slides) < min_slides:
         # extend with concise continuations to avoid broken outputs
         base = slides[-1] if slides else {"role":"development","body":""}
@@ -1180,7 +1196,7 @@ No markdown. No explanations. No extra text.
         await context.bot.send_message(
             chat_id=drafts_chat_id,
             text=(
-                f"<b>Slide {i} ({_e(str(s.get('role') or 'development'))}): {title}</b>\n\n"
+                f"<b>Slide {i}: {title}</b>\n\n"
                 f"{body}\n\n"
                 f"🎭 <b>Emoción</b> {emotion} · <b>Sujeto</b> {subject}\n"
                 f"🔗 <b>Puente al siguiente</b>\n{bridge}\n\n"

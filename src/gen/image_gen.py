@@ -126,10 +126,10 @@ def apply_carousel_index_badge(data: bytes, mime: str, idx: int, total: int) -> 
         margin = max(14, int(min(w, h) * 0.02))
         pad = max(10, int(fs * 0.35))
 
-        x1 = w - tw - (pad * 2) - margin
-        y1 = margin
-        x2 = w - margin
-        y2 = y1 + th + (pad * 2)
+        x1 = margin
+        y2 = h - margin
+        x2 = x1 + tw + (pad * 2)
+        y1 = y2 - th - (pad * 2)
 
         draw.rounded_rectangle((x1, y1, x2, y2), radius=max(10, int(fs * 0.35)), fill=(0, 0, 0, 170))
         draw.text((x1 + pad, y1 + pad), label, font=font, fill=(255, 255, 255, 235))
