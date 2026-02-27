@@ -1032,7 +1032,7 @@ async def cmd_carousel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     prompt = f"""
 Eres editor senior de storytelling para carruseles de Instagram. Responde SOLO JSON válido.
-Objetivo: crear un carrusel de 6 slides en español con continuidad narrativa total.
+Objetivo: crear un carrusel de 6 slides en español con continuidad narrativa total y emoción humana.
 Tema: {topic}
 
 Devuelve este JSON exacto:
@@ -1045,13 +1045,14 @@ Devuelve este JSON exacto:
     "resolution": "string"
   }},
   "visual_bible": "string",
+  "protagonist": "string",
   "slides": [
-    {{"n":1,"title":"string","body":"string","bridge":"string","visual_prompt":"string"}},
-    {{"n":2,"title":"string","body":"string","bridge":"string","visual_prompt":"string"}},
-    {{"n":3,"title":"string","body":"string","bridge":"string","visual_prompt":"string"}},
-    {{"n":4,"title":"string","body":"string","bridge":"string","visual_prompt":"string"}},
-    {{"n":5,"title":"string","body":"string","bridge":"string","visual_prompt":"string"}},
-    {{"n":6,"title":"string","body":"string","bridge":"string","visual_prompt":"string"}}
+    {{"n":1,"title":"string","body":"string","bridge":"string","emotion":"string","subject":"string","visual_prompt":"string"}},
+    {{"n":2,"title":"string","body":"string","bridge":"string","emotion":"string","subject":"string","visual_prompt":"string"}},
+    {{"n":3,"title":"string","body":"string","bridge":"string","emotion":"string","subject":"string","visual_prompt":"string"}},
+    {{"n":4,"title":"string","body":"string","bridge":"string","emotion":"string","subject":"string","visual_prompt":"string"}},
+    {{"n":5,"title":"string","body":"string","bridge":"string","emotion":"string","subject":"string","visual_prompt":"string"}},
+    {{"n":6,"title":"string","body":"string","bridge":"string","emotion":"string","subject":"string","visual_prompt":"string"}}
   ],
   "caption": "string"
 }}
@@ -1060,7 +1061,11 @@ Reglas:
 - títulos de 4-8 palabras
 - body corto (máx ~70 palabras), cerrar con sentido
 - cada slide debe conectar explícitamente con el siguiente (bridge)
+- arco emocional obligatorio: curiosidad -> tensión -> conflicto -> giro -> claridad -> resolución
 - mantener mismos elementos visuales base en todo el carrusel (visual_bible)
+- protagonista consistente en al menos 4 de 6 slides
+- evitar sesgo de casting: no repetir género sin motivo narrativo; variar planos/personajes
+- evitar look stock genérico; priorizar estilo editorial cinematográfico/documental
 - tono educativo/estratégico, no partidista
 """.strip()
 
@@ -1082,6 +1087,7 @@ Reglas:
     caption = str(car.get("caption") or "")
     storyline = car.get("storyline") or {}
     visual_bible = str(car.get("visual_bible") or "").strip()
+    protagonist = str(car.get("protagonist") or "").strip()
 
     content = {
         "post_id": post_id,
@@ -1090,6 +1096,7 @@ Reglas:
         "caption": caption,
         "carousel_storyline": storyline,
         "carousel_visual_bible": visual_bible,
+        "carousel_protagonist": protagonist,
     }
 
     await create_post(post_id=post_id, topic=topic_out, bitcoin_anchor="")
@@ -1104,6 +1111,7 @@ Reglas:
             f"<b>Tema:</b> {_e(topic_out)}\n"
             f"<b>Slides:</b> <code>{len(slides)}</code>\n\n"
             f"<b>Storyline hook:</b> {_e(storyline.get('hook') or '')}\n"
+            f"<b>Protagonista:</b> {_e(protagonist or 'n/a')}\n"
             f"<b>Visual bible:</b> {_e(visual_bible[:220])}\n\n"
             "<i>Fase 3:</i> continuidad narrativa + numeración visual 1/6..6/6 al aprobar."
         ),
@@ -1115,12 +1123,15 @@ Reglas:
         title = _e(str(s.get("title") or f"Slide {i}"))
         body = _e(str(s.get("body") or ""))
         bridge = _e(str(s.get("bridge") or ""))
+        emotion = _e(str(s.get("emotion") or ""))
+        subject = _e(str(s.get("subject") or ""))
         vp = _e(str(s.get("visual_prompt") or ""))
         await context.bot.send_message(
             chat_id=drafts_chat_id,
             text=(
                 f"<b>Slide {i}: {title}</b>\n\n"
                 f"{body}\n\n"
+                f"🎭 <b>Emoción</b> {emotion} · <b>Sujeto</b> {subject}\n"
                 f"🔗 <b>Puente al siguiente</b>\n{bridge}\n\n"
                 f"🖼 <b>Prompt visual</b>\n{vp}"
             ),
@@ -1369,11 +1380,25 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     media_items = []
                     slide_order = []
 
+                    visual_bible = str((content or {}).get("carousel_visual_bible") or "").strip()
+                    protagonist = str((content or {}).get("carousel_protagonist") or "").strip()
+
                     for idx, s in enumerate(carousel_slides[:6], start=1):
                         title = str(s.get("title") or f"Slide {idx}").strip()
                         body = str(s.get("body") or "").strip()
+                        emotion = str(s.get("emotion") or "").strip()
+                        subject = str(s.get("subject") or "").strip()
+                        bridge = str(s.get("bridge") or "").strip()
                         visual_prompt = str(s.get("visual_prompt") or "").strip()
-                        prompt_src = visual_prompt or f"{title}. {body}"
+                        prompt_src = (
+                            f"Carousel slide {idx}/6. "
+                            f"Protagonist: {protagonist}. "
+                            f"Visual continuity bible: {visual_bible}. "
+                            f"Emotion target: {emotion}. Subject focus: {subject}. "
+                            f"Slide title: {title}. Narrative text context: {body}. "
+                            f"Transition bridge to next slide: {bridge}. "
+                            f"Scene direction: {visual_prompt or (title + '. ' + body)}"
+                        ).strip()
 
                         img_bytes = None
                         img_mime = None
