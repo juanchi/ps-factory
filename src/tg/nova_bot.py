@@ -1028,45 +1028,41 @@ async def cmd_carousel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text("Uso: <code>/carousel &lt;tema&gt;</code> o <code>/carrusel &lt;tema&gt;</code>", parse_mode=ParseMode.HTML)
         return
 
-    await update.message.reply_text("🧩 Generando carrusel (fase 3: continuidad narrativa)...", parse_mode=ParseMode.HTML)
+    await update.message.reply_text("🧩 Generando carrusel (nuevo formato narrativo)...", parse_mode=ParseMode.HTML)
 
     prompt = f"""
-Eres editor senior de storytelling para carruseles de Instagram. Responde SOLO JSON válido.
-Objetivo: crear un carrusel de 6 slides en español con continuidad narrativa total y emoción humana.
-Tema: {topic}
+You are an expert social media editor and visual storyteller.
+Task: generate a high-retention carousel in Spanish for mobile users.
+Topic: {topic}
 
-Devuelve este JSON exacto:
-{{
-  "topic": "string",
-  "storyline": {{
-    "hook": "string",
-    "conflict": "string",
-    "turn": "string",
-    "resolution": "string"
-  }},
-  "visual_bible": "string",
-  "protagonist": "string",
-  "slides": [
-    {{"n":1,"title":"string","body":"string","bridge":"string","emotion":"string","subject":"string","visual_prompt":"string"}},
-    {{"n":2,"title":"string","body":"string","bridge":"string","emotion":"string","subject":"string","visual_prompt":"string"}},
-    {{"n":3,"title":"string","body":"string","bridge":"string","emotion":"string","subject":"string","visual_prompt":"string"}},
-    {{"n":4,"title":"string","body":"string","bridge":"string","emotion":"string","subject":"string","visual_prompt":"string"}},
-    {{"n":5,"title":"string","body":"string","bridge":"string","emotion":"string","subject":"string","visual_prompt":"string"}},
-    {{"n":6,"title":"string","body":"string","bridge":"string","emotion":"string","subject":"string","visual_prompt":"string"}}
-  ],
-  "caption": "string"
-}}
+Follow strictly:
+- Carousel length: 4 to 8 slides (ideal 5-6)
+- One central idea only
+- Text inside image, understandable without caption
+- Max 20-25 words per slide
+- Conversational, simple language
+- Narrative structure:
+  1) hook
+  2-4) development
+  5) climax
+  6) cta (if 6 slides)
+- Every slide must create curiosity for the next one.
 
-Reglas:
-- títulos de 4-8 palabras
-- body corto (máx ~70 palabras), cerrar con sentido
-- cada slide debe conectar explícitamente con el siguiente (bridge)
-- arco emocional obligatorio: curiosidad -> tensión -> conflicto -> giro -> claridad -> resolución
-- mantener mismos elementos visuales base en todo el carrusel (visual_bible)
-- protagonista consistente en al menos 4 de 6 slides
-- evitar sesgo de casting: no repetir género sin motivo narrativo; variar planos/personajes
-- evitar look stock genérico; priorizar estilo editorial cinematográfico/documental
-- tono educativo/estratégico, no partidista
+Return ONLY valid JSON in this exact format:
+{
+  "carousel": {
+    "topic": "main topic",
+    "slides": [
+      {"n": 1, "role": "hook", "text": "..."},
+      {"n": 2, "role": "development", "text": "..."},
+      {"n": 3, "role": "development", "text": "..."},
+      {"n": 4, "role": "development", "text": "..."},
+      {"n": 5, "role": "climax", "text": "..."},
+      {"n": 6, "role": "cta", "text": "..."}
+    ]
+  }
+}
+No markdown. No explanations. No extra text.
 """.strip()
 
     raw = openclaw_chat(prompt)
@@ -1076,25 +1072,50 @@ Reglas:
         await update.message.reply_text("❌ No vino JSON válido para carrusel.", parse_mode=ParseMode.HTML)
         return
 
-    slides = car.get("slides") or []
-    if not isinstance(slides, list) or not slides:
+    payload = car.get("carousel") if isinstance(car, dict) and isinstance(car.get("carousel"), dict) else car
+    slides_raw = (payload.get("slides") if isinstance(payload, dict) else None) or []
+    if not isinstance(slides_raw, list) or not slides_raw:
         await update.message.reply_text("❌ Carrusel inválido: faltan slides.", parse_mode=ParseMode.HTML)
         return
 
+    # Normalize new schema {n, role, text} -> internal schema
+    slides = []
+    for i, s in enumerate(slides_raw[:8], start=1):
+        txt = str((s or {}).get("text") or "").strip()
+        role = str((s or {}).get("role") or "development").strip().lower()
+        title = str((s or {}).get("title") or role.title()).strip()
+        if not txt:
+            continue
+        slides.append({
+            "n": i,
+            "role": role,
+            "title": title,
+            "body": txt,
+            "bridge": "",
+            "emotion": "",
+            "subject": "",
+            "visual_prompt": txt,
+        })
+
+    if not slides:
+        await update.message.reply_text("❌ Carrusel inválido: slides sin texto.", parse_mode=ParseMode.HTML)
+        return
+
+    # enforce MVP target 6 slides (pad or trim)
     slides = slides[:6]
     post_id = f"car-{_now_ts()}"
-    topic_out = str(car.get("topic") or topic)
-    caption = str(car.get("caption") or "")
-    storyline = car.get("storyline") or {}
-    visual_bible = str(car.get("visual_bible") or "").strip()
-    protagonist = str(car.get("protagonist") or "").strip()
+    topic_out = str((payload.get("topic") if isinstance(payload, dict) else "") or topic)
+    caption = str((car.get("caption") if isinstance(car, dict) else "") or "")
+    storyline = car.get("storyline") if isinstance(car, dict) else {}
+    visual_bible = str((car.get("visual_bible") if isinstance(car, dict) else "") or "").strip()
+    protagonist = str((car.get("protagonist") if isinstance(car, dict) else "") or "").strip()
 
     content = {
         "post_id": post_id,
         "topic": topic_out,
         "carousel": slides,
         "caption": caption,
-        "carousel_storyline": storyline,
+        "carousel_storyline": storyline or {},
         "carousel_visual_bible": visual_bible,
         "carousel_protagonist": protagonist,
     }
