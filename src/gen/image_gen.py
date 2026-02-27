@@ -220,6 +220,33 @@ def _apply_watermark_if_enabled(data: bytes, mime: str) -> Tuple[bytes, str]:
         return buf.getvalue(), "image/jpeg"
 
 
+
+def detect_forbidden_text_in_image(data: bytes, mime: str, forbidden_tokens: list[str]) -> tuple[bool, str]:
+    """OCR-check generated image for forbidden labels/tokens. Returns (hit, token)."""
+    toks = [str(t or "").strip().lower() for t in (forbidden_tokens or []) if str(t or "").strip()]
+    if not toks:
+        return False, ""
+    try:
+        from io import BytesIO
+        from PIL import Image
+        import pytesseract
+    except Exception as e:
+        logger.warning("OCR check skipped (pytesseract/Pillow unavailable): %s", e)
+        return False, ""
+
+    try:
+        with Image.open(BytesIO(data)) as im:
+            text = pytesseract.image_to_string(im)
+    except Exception as e:
+        logger.warning("OCR check failed: %s", e)
+        return False, ""
+
+    low = (text or "").lower()
+    for t in toks:
+        if t and t in low:
+            return True, t
+    return False, ""
+
 def generate_image_gemini(*, visual_prompt: str, timeout_s: int = 90) -> Tuple[bytes, str, str]:
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
     if not api_key:

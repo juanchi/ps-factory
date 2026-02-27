@@ -16,7 +16,7 @@ from telegram.request import HTTPXRequest
 
 from tg.callbacks import build_post_keyboard
 from gen.openclaw_gen import openclaw_chat
-from gen.image_gen import generate_image, validate_4_5, build_image_prompt_en as _build_image_prompt_en, ImageGenError, apply_carousel_index_badge
+from gen.image_gen import generate_image, validate_4_5, build_image_prompt_en as _build_image_prompt_en, ImageGenError, apply_carousel_index_badge, detect_forbidden_text_in_image
 
 from db.sqlite_store import (
     DB_PATH,
@@ -1453,6 +1453,9 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
                 approve_max_slides = int(os.getenv("CAROUSEL_MAX_SLIDES_APPROVE", "10"))
                 needed = min(approve_max_slides, len(carousel_slides)) if image_only_on_approve else 0
+                reject_labels_raw = os.getenv("CAROUSEL_REJECT_LABELS", "hook,desarrollo,climax,cta,slide,1/6,2/6,3/6,4/6,5/6,6/6")
+                reject_labels = [x.strip().lower() for x in reject_labels_raw.split(",") if x.strip()]
+                ocr_strict = os.getenv("CAROUSEL_OCR_STRICT", "1").strip().lower() in {"1","true","yes","on"}
                 if image_only_on_approve and (day_count + needed) > carousel_day_limit:
                     await query.message.reply_text(
                         "🟠 APPROVE CARRUSEL bloqueado: límite diario de imágenes alcanzado.\n"
@@ -1510,6 +1513,12 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                                 )
                                 ok45, w, h = validate_4_5(bts, mime)
                                 if ok45:
+                                    hit, token = detect_forbidden_text_in_image(bts, mime, reject_labels)
+                                    if hit:
+                                        last_reason = f"forbidden_label:{token}"
+                                        await log_event(post_id, "CAROUSEL_OCR_RETRY", {"slide": idx, "attempt": attempt, "token": token})
+                                        if ocr_strict:
+                                            continue
                                     img_bytes, img_mime = bts, mime
                                     break
                                 last_reason = f"bad_aspect:{w}x{h}"
@@ -1518,7 +1527,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
                         if not img_bytes:
                             await query.message.reply_text(
-                                f"❌ Carrusel bloqueado en slide {idx}: no se pudo generar imagen 4:5.\n"
+                                f"❌ Carrusel bloqueado en slide {idx}: no se pudo generar imagen válida (4:5 / OCR).\n"
                                 f"<code>{_e(last_reason)}</code>",
                                 parse_mode=ParseMode.HTML,
                             )
