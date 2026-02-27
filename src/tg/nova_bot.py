@@ -16,7 +16,7 @@ from telegram.request import HTTPXRequest
 
 from tg.callbacks import build_post_keyboard
 from gen.openclaw_gen import openclaw_chat
-from gen.image_gen import generate_image, validate_4_5, build_image_prompt_en as _build_image_prompt_en, ImageGenError
+from gen.image_gen import generate_image, validate_4_5, build_image_prompt_en as _build_image_prompt_en, ImageGenError, apply_carousel_index_badge
 
 from db.sqlite_store import (
     DB_PATH,
@@ -1028,23 +1028,30 @@ async def cmd_carousel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text("Uso: <code>/carousel &lt;tema&gt;</code> o <code>/carrusel &lt;tema&gt;</code>", parse_mode=ParseMode.HTML)
         return
 
-    await update.message.reply_text("🧩 Generando carrusel (fase 1)...", parse_mode=ParseMode.HTML)
+    await update.message.reply_text("🧩 Generando carrusel (fase 3: continuidad narrativa)...", parse_mode=ParseMode.HTML)
 
     prompt = f"""
-Eres editor de contenido de Panamá Soberano. Responde SOLO JSON válido.
-Objetivo: crear un carrusel de 6 slides para Instagram (español), con storytelling claro.
+Eres editor senior de storytelling para carruseles de Instagram. Responde SOLO JSON válido.
+Objetivo: crear un carrusel de 6 slides en español con continuidad narrativa total.
 Tema: {topic}
 
 Devuelve este JSON exacto:
 {{
   "topic": "string",
+  "storyline": {{
+    "hook": "string",
+    "conflict": "string",
+    "turn": "string",
+    "resolution": "string"
+  }},
+  "visual_bible": "string",
   "slides": [
-    {{"n":1,"title":"string","body":"string","visual_prompt":"string"}},
-    {{"n":2,"title":"string","body":"string","visual_prompt":"string"}},
-    {{"n":3,"title":"string","body":"string","visual_prompt":"string"}},
-    {{"n":4,"title":"string","body":"string","visual_prompt":"string"}},
-    {{"n":5,"title":"string","body":"string","visual_prompt":"string"}},
-    {{"n":6,"title":"string","body":"string","visual_prompt":"string"}}
+    {{"n":1,"title":"string","body":"string","bridge":"string","visual_prompt":"string"}},
+    {{"n":2,"title":"string","body":"string","bridge":"string","visual_prompt":"string"}},
+    {{"n":3,"title":"string","body":"string","bridge":"string","visual_prompt":"string"}},
+    {{"n":4,"title":"string","body":"string","bridge":"string","visual_prompt":"string"}},
+    {{"n":5,"title":"string","body":"string","bridge":"string","visual_prompt":"string"}},
+    {{"n":6,"title":"string","body":"string","bridge":"string","visual_prompt":"string"}}
   ],
   "caption": "string"
 }}
@@ -1052,6 +1059,8 @@ Devuelve este JSON exacto:
 Reglas:
 - títulos de 4-8 palabras
 - body corto (máx ~70 palabras), cerrar con sentido
+- cada slide debe conectar explícitamente con el siguiente (bridge)
+- mantener mismos elementos visuales base en todo el carrusel (visual_bible)
 - tono educativo/estratégico, no partidista
 """.strip()
 
@@ -1071,12 +1080,16 @@ Reglas:
     post_id = f"car-{_now_ts()}"
     topic_out = str(car.get("topic") or topic)
     caption = str(car.get("caption") or "")
+    storyline = car.get("storyline") or {}
+    visual_bible = str(car.get("visual_bible") or "").strip()
 
     content = {
         "post_id": post_id,
         "topic": topic_out,
         "carousel": slides,
         "caption": caption,
+        "carousel_storyline": storyline,
+        "carousel_visual_bible": visual_bible,
     }
 
     await create_post(post_id=post_id, topic=topic_out, bitcoin_anchor="")
@@ -1090,7 +1103,9 @@ Reglas:
             f"🧩 <b>CARRUSEL v1</b> — <code>{_e(post_id)}</code>\n"
             f"<b>Tema:</b> {_e(topic_out)}\n"
             f"<b>Slides:</b> <code>{len(slides)}</code>\n\n"
-            "<i>Fase 2:</i> imágenes se generan al aprobar (ahorro de costo en draft)."
+            f"<b>Storyline hook:</b> {_e(storyline.get('hook') or '')}\n"
+            f"<b>Visual bible:</b> {_e(visual_bible[:220])}\n\n"
+            "<i>Fase 3:</i> continuidad narrativa + numeración visual 1/6..6/6 al aprobar."
         ),
         parse_mode=ParseMode.HTML,
         disable_web_page_preview=True,
@@ -1099,12 +1114,14 @@ Reglas:
     for i, s in enumerate(slides, start=1):
         title = _e(str(s.get("title") or f"Slide {i}"))
         body = _e(str(s.get("body") or ""))
+        bridge = _e(str(s.get("bridge") or ""))
         vp = _e(str(s.get("visual_prompt") or ""))
         await context.bot.send_message(
             chat_id=drafts_chat_id,
             text=(
                 f"<b>Slide {i}: {title}</b>\n\n"
                 f"{body}\n\n"
+                f"🔗 <b>Puente al siguiente</b>\n{bridge}\n\n"
                 f"🖼 <b>Prompt visual</b>\n{vp}"
             ),
             parse_mode=ParseMode.HTML,
@@ -1386,6 +1403,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                             await log_event(post_id, "APPROVE_BLOCKED_CAROUSEL", {"by": approver, "version": ver, "slide": idx, "reason": last_reason})
                             return
 
+                        img_bytes, img_mime = apply_carousel_index_badge(img_bytes, img_mime, idx=idx, total=min(6, len(carousel_slides)))
                         media_items.append(InputMediaPhoto(media=img_bytes))
                         slide_order.append(idx)
                         generated += 1
@@ -1400,7 +1418,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     if cap:
                         sent = await context.bot.send_message(
                             chat_id=approved_chat_id,
-                            text=f"📝 <b>Caption carrusel</b>\n{_e(cap)}",
+                            text=f"📝 <b>Caption carrusel</b>\n{_e(cap)}\n\n<i>Secuencia visual: 1/6 → 6/6 (badge en cada slide)</i>",
                             parse_mode=ParseMode.HTML,
                             disable_web_page_preview=True,
                         )

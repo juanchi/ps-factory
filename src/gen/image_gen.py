@@ -100,6 +100,49 @@ def _normalize_model_name(model_name: str) -> str:
     return m.split("/", 1)[1] if m.startswith("models/") else m
 
 
+def apply_carousel_index_badge(data: bytes, mime: str, idx: int, total: int) -> Tuple[bytes, str]:
+    """Draw a visible slide order badge (e.g. 1/6) on top-right."""
+    try:
+        from io import BytesIO
+        from PIL import Image, ImageDraw, ImageFont
+    except Exception as e:
+        logger.warning("Carousel badge skipped (Pillow missing): %s", e)
+        return data, mime
+
+    label = f"{max(1, int(idx))}/{max(1, int(total))}"
+    with Image.open(BytesIO(data)).convert("RGBA") as im:
+        w, h = im.size
+        overlay = Image.new("RGBA", im.size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
+
+        fs = max(22, int(min(w, h) * 0.038))
+        try:
+            font = ImageFont.truetype("DejaVuSans-Bold.ttf", fs)
+        except Exception:
+            font = ImageFont.load_default()
+
+        bbox = draw.textbbox((0, 0), label, font=font)
+        tw, th = max(1, bbox[2]-bbox[0]), max(1, bbox[3]-bbox[1])
+        margin = max(14, int(min(w, h) * 0.02))
+        pad = max(10, int(fs * 0.35))
+
+        x1 = w - tw - (pad * 2) - margin
+        y1 = margin
+        x2 = w - margin
+        y2 = y1 + th + (pad * 2)
+
+        draw.rounded_rectangle((x1, y1, x2, y2), radius=max(10, int(fs * 0.35)), fill=(0, 0, 0, 170))
+        draw.text((x1 + pad, y1 + pad), label, font=font, fill=(255, 255, 255, 235))
+
+        out = Image.alpha_composite(im, overlay)
+        buf = BytesIO()
+        if mime == "image/png":
+            out.save(buf, format="PNG")
+            return buf.getvalue(), "image/png"
+        out.convert("RGB").save(buf, format="JPEG", quality=92)
+        return buf.getvalue(), "image/jpeg"
+
+
 def _apply_watermark_if_enabled(data: bytes, mime: str) -> Tuple[bytes, str]:
     enabled = os.getenv("IMAGE_WATERMARK_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
     if not enabled:
