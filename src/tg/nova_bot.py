@@ -1067,6 +1067,7 @@ Additional strict rules:
 - choose slide_count dynamically between 4 and 10 according to topic complexity
 - do NOT include labels like 'Hook', 'Desarrollo', 'Climax', 'CTA' inside slide text
 - do NOT include numbering references inside slide text (no 1/6, slide 1, etc.)
+- keep slide text natural; never prepend section labels
 No markdown. No explanations. No extra text.
 """.strip()
 

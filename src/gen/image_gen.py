@@ -168,7 +168,12 @@ def _apply_watermark_if_enabled(data: bytes, mime: str) -> Tuple[bytes, str]:
         overlay = Image.new("RGBA", im.size, (0, 0, 0, 0))
         draw = ImageDraw.Draw(overlay)
 
-        base_size = max(22, int(min(w, h) * 0.045))
+        scale_raw = os.getenv("IMAGE_WATERMARK_SCALE", "0.65").strip()
+        try:
+            wm_scale = max(0.3, min(1.5, float(scale_raw)))
+        except Exception:
+            wm_scale = 0.65
+        base_size = max(14, int(min(w, h) * 0.045 * wm_scale))
         try:
             font = ImageFont.truetype("DejaVuSans-Bold.ttf", base_size)
         except Exception:
@@ -177,7 +182,11 @@ def _apply_watermark_if_enabled(data: bytes, mime: str) -> Tuple[bytes, str]:
         bbox = draw.textbbox((0, 0), text, font=font)
         tw = max(1, bbox[2] - bbox[0])
         th = max(1, bbox[3] - bbox[1])
-        margin = max(12, int(min(w, h) * 0.02))
+        margin_raw = os.getenv("IMAGE_WATERMARK_MARGIN", "6").strip()
+        try:
+            margin = max(2, int(margin_raw))
+        except Exception:
+            margin = 6
 
         if position == "bottom_left":
             x, y = margin, h - th - margin
