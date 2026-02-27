@@ -1050,19 +1050,19 @@ Follow strictly:
 - Every slide must create curiosity for the next one.
 
 Return ONLY valid JSON in this exact format:
-{
-  "carousel": {
+{{
+  "carousel": {{
     "topic": "main topic",
     "slides": [
-      {"n": 1, "role": "hook", "text": "..."},
-      {"n": 2, "role": "development", "text": "..."},
-      {"n": 3, "role": "development", "text": "..."},
-      {"n": 4, "role": "development", "text": "..."},
-      {"n": 5, "role": "climax", "text": "..."},
-      {"n": 6, "role": "cta", "text": "..."}
+      {{"n": 1, "role": "hook", "text": "..."}},
+      {{"n": 2, "role": "development", "text": "..."}},
+      {{"n": 3, "role": "development", "text": "..."}},
+      {{"n": 4, "role": "development", "text": "..."}},
+      {{"n": 5, "role": "climax", "text": "..."}},
+      {{"n": 6, "role": "cta", "text": "..."}}
     ]
-  }
-}
+  }}
+}}
 No markdown. No explanations. No extra text.
 """.strip()
 
