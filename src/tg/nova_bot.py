@@ -1053,6 +1053,7 @@ Return ONLY valid JSON in this exact format:
 {{
   "carousel": {{
     "topic": "main topic",
+    "complexity": "simple|medium|complex",
     "slide_count": 4,
     "slides": [
       {{"n": 1, "role": "hook", "text": "..."}},
@@ -1064,7 +1065,7 @@ Return ONLY valid JSON in this exact format:
   "caption": "texto humano y conversacional para acompañar el carrusel"
 }}
 Additional strict rules:
-- choose slide_count dynamically between 4 and 10 according to topic complexity
+- choose complexity (simple|medium|complex) and slide_count dynamically between 4 and 10 according to topic complexity
 - do NOT include labels like 'Hook', 'Desarrollo', 'Climax', 'CTA' inside slide text
 - do NOT include numbering references inside slide text (no 1/6, slide 1, etc.)
 - keep slide text natural; never prepend section labels
@@ -1108,24 +1109,51 @@ No markdown. No explanations. No extra text.
         return
 
     requested_count = None
+    complexity = None
     if isinstance(payload, dict):
         try:
             requested_count = int(payload.get("slide_count")) if payload.get("slide_count") is not None else None
         except Exception:
             requested_count = None
+        complexity = str(payload.get("complexity") or "").strip().lower() or None
 
     min_slides = int(os.getenv("CAROUSEL_MIN_SLIDES", "4"))
     max_slides = int(os.getenv("CAROUSEL_MAX_SLIDES", "10"))
     if max_slides < min_slides:
         max_slides = min_slides
 
-    # dynamic slide count from model output (+ env limits)
-    target_count = requested_count if requested_count is not None else len(slides)
-    if target_count <= 0:
-        target_count = len(slides)
+    def _complexity_target(cpx: str | None, base_len: int) -> int:
+        if cpx == "simple":
+            return 5
+        if cpx == "medium":
+            return 7
+        if cpx == "complex":
+            return 9
+        # fallback heuristic
+        if base_len <= 5:
+            return 5
+        if base_len <= 7:
+            return 7
+        return 9
+
+    # strict dynamic count by complexity + requested count
+    comp_target = _complexity_target(complexity, len(slides))
+    target_count = requested_count if (requested_count is not None and requested_count > 0) else comp_target
     target_count = max(min_slides, min(max_slides, target_count))
 
     slides = slides[:target_count]
+
+    # enforce role progression and close with CTA
+    for i, sl in enumerate(slides, start=1):
+        if i == 1:
+            sl["role"] = "hook"
+        elif i == len(slides):
+            sl["role"] = "cta"
+        elif i == max(2, len(slides)-1):
+            sl["role"] = "climax"
+        else:
+            sl["role"] = "development"
+
     if len(slides) < min_slides:
         # extend with concise continuations to avoid broken outputs
         base = slides[-1] if slides else {"role":"development","body":""}
