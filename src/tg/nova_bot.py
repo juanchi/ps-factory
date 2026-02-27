@@ -1036,9 +1036,10 @@ Task: generate a high-retention carousel in Spanish for mobile users.
 Topic: {topic}
 
 Follow strictly:
-- Carousel length: 4 to 8 slides (ideal 5-6)
+- Carousel length: dynamic between 4 and 10 slides depending on topic complexity (ideal 5-8)
 - One central idea only
 - Text inside image, understandable without caption
+- Do NOT include slide numbering labels inside image text (no "1/6", "slide 1", "hook", "development", "climax", "cta")
 - Max 20-25 words per slide
 - Conversational, simple language
 - Narrative structure:
@@ -1101,12 +1102,41 @@ No markdown. No explanations. No extra text.
         await update.message.reply_text("❌ Carrusel inválido: slides sin texto.", parse_mode=ParseMode.HTML)
         return
 
-    # enforce MVP target 6 slides (pad or trim)
-    slides = slides[:6]
+    min_slides = int(os.getenv("CAROUSEL_MIN_SLIDES", "4"))
+    max_slides = int(os.getenv("CAROUSEL_MAX_SLIDES", "10"))
+    if max_slides < min_slides:
+        max_slides = min_slides
+
+    # dynamic slide count from model output, clamped by env
+    slides = slides[:max_slides]
+    if len(slides) < min_slides:
+        # extend with concise continuations to avoid broken outputs
+        base = slides[-1] if slides else {"role":"development","body":""}
+        while len(slides) < min_slides:
+            i = len(slides) + 1
+            slides.append({
+                "n": i,
+                "role": "development" if i < min_slides else "cta",
+                "title": "Continuación",
+                "body": str(base.get("body") or "Resumen de la idea central."),
+                "bridge": "",
+                "emotion": "",
+                "subject": "",
+                "visual_prompt": str(base.get("visual_prompt") or base.get("body") or ""),
+            })
+
     post_id = f"car-{_now_ts()}"
     topic_out = str((payload.get("topic") if isinstance(payload, dict) else "") or topic)
-    caption = str((car.get("caption") if isinstance(car, dict) else "") or "")
-    storyline = car.get("storyline") if isinstance(car, dict) else {}
+    caption = str((car.get("caption") if isinstance(car, dict) else "") or "").strip()
+    if not caption:
+        t = topic_out if topic_out else topic
+        caption = (
+            f"{t}.\n\n"
+            "Si este análisis te aporta contexto, guárdalo y compártelo. "
+            "¿Qué punto te parece más relevante?\n\n"
+            "#PanamáSoberano #PanamáSoberanoConBitcoin"
+        )
+    storyline = (car.get("storyline") or {}) if isinstance(car, dict) else {}
     visual_bible = str((car.get("visual_bible") if isinstance(car, dict) else "") or "").strip()
     protagonist = str((car.get("protagonist") if isinstance(car, dict) else "") or "").strip()
 
@@ -1150,7 +1180,7 @@ No markdown. No explanations. No extra text.
         await context.bot.send_message(
             chat_id=drafts_chat_id,
             text=(
-                f"<b>Slide {i}: {title}</b>\n\n"
+                f"<b>Slide {i} ({_e(str(s.get('role') or 'development'))}): {title}</b>\n\n"
                 f"{body}\n\n"
                 f"🎭 <b>Emoción</b> {emotion} · <b>Sujeto</b> {subject}\n"
                 f"🔗 <b>Puente al siguiente</b>\n{bridge}\n\n"
@@ -1376,7 +1406,8 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 except Exception:
                     day_count = 0
 
-                needed = min(6, len(carousel_slides)) if image_only_on_approve else 0
+                approve_max_slides = int(os.getenv("CAROUSEL_MAX_SLIDES_APPROVE", "10"))
+                needed = min(approve_max_slides, len(carousel_slides)) if image_only_on_approve else 0
                 if image_only_on_approve and (day_count + needed) > carousel_day_limit:
                     await query.message.reply_text(
                         "🟠 APPROVE CARRUSEL bloqueado: límite diario de imágenes alcanzado.\n"
@@ -1404,7 +1435,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     visual_bible = str((content or {}).get("carousel_visual_bible") or "").strip()
                     protagonist = str((content or {}).get("carousel_protagonist") or "").strip()
 
-                    for idx, s in enumerate(carousel_slides[:6], start=1):
+                    for idx, s in enumerate(carousel_slides[:approve_max_slides], start=1):
                         title = str(s.get("title") or f"Slide {idx}").strip()
                         body = str(s.get("body") or "").strip()
                         emotion = str(s.get("emotion") or "").strip()
@@ -1449,7 +1480,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                             await log_event(post_id, "APPROVE_BLOCKED_CAROUSEL", {"by": approver, "version": ver, "slide": idx, "reason": last_reason})
                             return
 
-                        img_bytes, img_mime = apply_carousel_index_badge(img_bytes, img_mime, idx=idx, total=min(6, len(carousel_slides)))
+                        img_bytes, img_mime = apply_carousel_index_badge(img_bytes, img_mime, idx=idx, total=min(approve_max_slides, len(carousel_slides)))
                         media_items.append(InputMediaPhoto(media=img_bytes))
                         slide_order.append(idx)
                         generated += 1
@@ -1477,7 +1508,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                     )
                 else:
                     # fallback textual only (rare)
-                    for idx, s in enumerate(carousel_slides[:6], start=1):
+                    for idx, s in enumerate(carousel_slides[:approve_max_slides], start=1):
                         title = str(s.get("title") or f"Slide {idx}").strip()
                         body = str(s.get("body") or "").strip()
                         sent = await context.bot.send_message(
