@@ -247,6 +247,50 @@ def detect_forbidden_text_in_image(data: bytes, mime: str, forbidden_tokens: lis
             return True, t
     return False, ""
 
+
+
+def detect_blank_or_letterbox_bands(data: bytes, mime: str) -> tuple[bool, str]:
+    """Detect top/bottom banners or blank/letterbox-like zones that break full-bleed look."""
+    try:
+        from io import BytesIO
+        from PIL import Image, ImageStat
+    except Exception as e:
+        logger.warning("Band check skipped (Pillow unavailable): %s", e)
+        return False, ""
+
+    try:
+        with Image.open(BytesIO(data)).convert("RGB") as im:
+            w, h = im.size
+            band_h = max(24, int(h * 0.18))
+            top = im.crop((0, 0, w, band_h))
+            bottom = im.crop((0, h - band_h, w, h))
+
+            def _stats(img):
+                st = ImageStat.Stat(img)
+                mean = sum(st.mean) / 3.0
+                std = sum(st.stddev) / 3.0
+                return mean, std
+
+            t_mean, t_std = _stats(top)
+            b_mean, b_std = _stats(bottom)
+
+            # Heuristics:
+            # - very low stddev => flat bar/panel
+            # - very dark + low stddev => letterbox-style black band
+            if t_std < 18:
+                return True, f"top_flat:{t_mean:.1f}/{t_std:.1f}"
+            if b_std < 18:
+                return True, f"bottom_flat:{b_mean:.1f}/{b_std:.1f}"
+            if t_mean < 35 and t_std < 24:
+                return True, f"top_letterbox:{t_mean:.1f}/{t_std:.1f}"
+            if b_mean < 35 and b_std < 24:
+                return True, f"bottom_letterbox:{b_mean:.1f}/{b_std:.1f}"
+    except Exception as e:
+        logger.warning("Band check failed: %s", e)
+        return False, ""
+
+    return False, ""
+
 def generate_image_gemini(*, visual_prompt: str, timeout_s: int = 90) -> Tuple[bytes, str, str]:
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
     if not api_key:

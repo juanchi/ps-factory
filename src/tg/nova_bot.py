@@ -16,7 +16,7 @@ from telegram.request import HTTPXRequest
 
 from tg.callbacks import build_post_keyboard
 from gen.openclaw_gen import openclaw_chat
-from gen.image_gen import generate_image, validate_4_5, build_image_prompt_en as _build_image_prompt_en, ImageGenError, apply_carousel_index_badge, detect_forbidden_text_in_image
+from gen.image_gen import generate_image, validate_4_5, build_image_prompt_en as _build_image_prompt_en, ImageGenError, apply_carousel_index_badge, detect_forbidden_text_in_image, detect_blank_or_letterbox_bands
 
 from db.sqlite_store import (
     DB_PATH,
@@ -1545,6 +1545,17 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                                                 + " IMPORTANT: no text, no letters, no words, no logos, no labels, no numbers, no watermark."
                                             )
                                             continue
+
+                                    band_hit, band_reason = detect_blank_or_letterbox_bands(bts, mime)
+                                    if band_hit:
+                                        last_reason = f"layout_band:{band_reason}"
+                                        await log_event(post_id, "CAROUSEL_LAYOUT_RETRY", {"slide": idx, "attempt": attempt, "reason": band_reason})
+                                        prompt_src = (
+                                            prompt_src
+                                            + " IMPORTANT: full-bleed edge-to-edge composition. No split panels, no top header block, no bottom empty area, no letterbox bands."
+                                        )
+                                        continue
+
                                     img_bytes, img_mime = bts, mime
                                     break
                                 last_reason = f"bad_aspect:{w}x{h}"
