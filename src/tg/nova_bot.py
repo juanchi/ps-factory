@@ -1595,9 +1595,19 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
                     cap = str((content or {}).get("caption") or "").strip()
                     if cap:
+                        total_slides = len(carousel_slides)
+                        if slide_order:
+                            contiguous = len(slide_order) == (slide_order[-1] - slide_order[0] + 1)
+                            if contiguous:
+                                seq_txt = f"{slide_order[0]}/{total_slides} → {slide_order[-1]}/{total_slides}"
+                            else:
+                                seq_txt = ", ".join([f"{i}/{total_slides}" for i in slide_order])
+                        else:
+                            seq_txt = f"1/{total_slides}"
+
                         sent = await context.bot.send_message(
                             chat_id=approved_chat_id,
-                            text=f"📝 <b>Caption carrusel</b>\n{_e(cap)}\n\n<i>Secuencia visual: 1/6 → 6/6 (badge en cada slide)</i>",
+                            text=f"📝 <b>Caption carrusel</b>\n{_e(cap)}\n\n<i>Secuencia visual: {seq_txt} (badge en cada slide)</i>",
                             parse_mode=ParseMode.HTML,
                             disable_web_page_preview=True,
                         )
