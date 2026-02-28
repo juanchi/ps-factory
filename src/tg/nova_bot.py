@@ -1521,14 +1521,29 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                                         last_reason = f"forbidden_label:{token}"
                                         await log_event(post_id, "CAROUSEL_OCR_RETRY", {"slide": idx, "attempt": attempt, "token": token})
                                         if ocr_strict:
+                                            prompt_src = (
+                                                prompt_src
+                                                + " IMPORTANT: no text, no letters, no words, no logos, no labels, no numbers, no watermark."
+                                            )
                                             continue
                                     img_bytes, img_mime = bts, mime
                                     break
                                 last_reason = f"bad_aspect:{w}x{h}"
+                                prompt_src = prompt_src + " IMPORTANT: portrait composition strict 4:5."
                             except Exception as e:
                                 last_reason = str(e)[:180]
 
                         if not img_bytes:
+                            skip_failed = os.getenv("CAROUSEL_SKIP_FAILED_SLIDES", "1").strip().lower() in {"1", "true", "yes", "on"}
+                            if skip_failed:
+                                await query.message.reply_text(
+                                    f"⚠️ Slide {idx} omitido: no se pudo generar imagen válida tras reintentos.\n"
+                                    f"<code>{_e(last_reason)}</code>",
+                                    parse_mode=ParseMode.HTML,
+                                )
+                                await log_event(post_id, "CAROUSEL_SLIDE_SKIPPED", {"by": approver, "version": ver, "slide": idx, "reason": last_reason})
+                                continue
+
                             await query.message.reply_text(
                                 f"❌ Carrusel bloqueado en slide {idx}: no se pudo generar imagen válida (4:5 / OCR).\n"
                                 f"<code>{_e(last_reason)}</code>",
@@ -1543,10 +1558,17 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                         generated += 1
 
                     sent = None
-                    if media_items:
-                        mg = await context.bot.send_media_group(chat_id=approved_chat_id, media=media_items)
-                        if mg:
-                            sent = mg[0]
+                    if not media_items:
+                        await query.message.reply_text(
+                            "❌ Carrusel bloqueado: no se logró generar ninguna slide válida.",
+                            parse_mode=ParseMode.HTML,
+                        )
+                        await log_event(post_id, "APPROVE_BLOCKED_CAROUSEL_EMPTY", {"by": approver, "version": ver})
+                        return
+
+                    mg = await context.bot.send_media_group(chat_id=approved_chat_id, media=media_items)
+                    if mg:
+                        sent = mg[0]
 
                     cap = str((content or {}).get("caption") or "").strip()
                     if cap:
