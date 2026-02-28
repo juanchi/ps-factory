@@ -1485,6 +1485,16 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
                     visual_bible = str((content or {}).get("carousel_visual_bible") or "").strip()
                     protagonist = str((content or {}).get("carousel_protagonist") or "").strip()
+                    style_profile = os.getenv("CAROUSEL_STYLE_PROFILE", "").strip()
+                    protagonist_lock = os.getenv("CAROUSEL_PROTAGONIST_LOCK", "1").strip().lower() in {"1", "true", "yes", "on"}
+
+                    # Shared visual lock to reduce style drift between slides
+                    style_lock = (
+                        "Use one single consistent art direction across all slides: same color palette, same rendering style, "
+                        "same camera language, same lighting mood, same typography policy (no text overlays), same post-processing."
+                    )
+                    if style_profile:
+                        style_lock += f" Style profile: {style_profile}."
 
                     for idx, s in enumerate(carousel_slides[:approve_max_slides], start=1):
                         await query.message.reply_text(
@@ -1497,14 +1507,19 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                         subject = str(s.get("subject") or "").strip()
                         bridge = str(s.get("bridge") or "").strip()
                         visual_prompt = str(s.get("visual_prompt") or "").strip()
+                        protagonist_txt = protagonist if protagonist_lock else (protagonist or "keep cast coherent with previous slides")
                         prompt_src = (
-                            f"Carousel slide {idx}/6. "
-                            f"Protagonist: {protagonist}. "
+                            f"Carousel slide {idx}/{min(approve_max_slides, len(carousel_slides))}. "
+                            f"Protagonist lock: {protagonist_txt}. "
                             f"Visual continuity bible: {visual_bible}. "
+                            f"{style_lock} "
                             f"Emotion target: {emotion}. Subject focus: {subject}. "
                             f"Slide title: {title}. Narrative text context: {body}. "
                             f"Transition bridge to next slide: {bridge}. "
-                            f"Scene direction: {visual_prompt or (title + '. ' + body)}"
+                            f"Scene direction: {visual_prompt or (title + '. ' + body)} "
+                            f"STRICT NEGATIVE: no text, no letters, no words, no subtitles, no footer text, no captions, "
+                            f"no logos, no watermark, no numbers, no UI overlays. Keep bottom 20% visually clean and low-detail "
+                            f"to preserve watermark/index readability."
                         ).strip()
 
                         img_bytes = None
