@@ -1535,21 +1535,30 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
                         if not img_bytes:
                             skip_failed = os.getenv("CAROUSEL_SKIP_FAILED_SLIDES", "1").strip().lower() in {"1", "true", "yes", "on"}
-                            if skip_failed:
+
+                            # Narrative safety: critical slides must not be skipped
+                            role = str(s.get("role") or "").strip().lower()
+                            critical_roles_raw = os.getenv("CAROUSEL_CRITICAL_ROLES", "hook,bridge,climax,cta")
+                            critical_roles = {x.strip().lower() for x in critical_roles_raw.split(",") if x.strip()}
+                            is_critical_by_role = bool(role and role in critical_roles)
+                            is_critical_by_position = idx == 1 or idx == min(approve_max_slides, len(carousel_slides))
+                            is_critical = is_critical_by_role or is_critical_by_position
+
+                            if skip_failed and not is_critical:
                                 await query.message.reply_text(
                                     f"⚠️ Slide {idx} omitido: no se pudo generar imagen válida tras reintentos.\n"
                                     f"<code>{_e(last_reason)}</code>",
                                     parse_mode=ParseMode.HTML,
                                 )
-                                await log_event(post_id, "CAROUSEL_SLIDE_SKIPPED", {"by": approver, "version": ver, "slide": idx, "reason": last_reason})
+                                await log_event(post_id, "CAROUSEL_SLIDE_SKIPPED", {"by": approver, "version": ver, "slide": idx, "reason": last_reason, "role": role or None})
                                 continue
 
                             await query.message.reply_text(
-                                f"❌ Carrusel bloqueado en slide {idx}: no se pudo generar imagen válida (4:5 / OCR).\n"
+                                f"❌ Carrusel bloqueado en slide {idx}: slide crítica sin imagen válida (4:5 / OCR).\n"
                                 f"<code>{_e(last_reason)}</code>",
                                 parse_mode=ParseMode.HTML,
                             )
-                            await log_event(post_id, "APPROVE_BLOCKED_CAROUSEL", {"by": approver, "version": ver, "slide": idx, "reason": last_reason})
+                            await log_event(post_id, "APPROVE_BLOCKED_CAROUSEL", {"by": approver, "version": ver, "slide": idx, "reason": last_reason, "role": role or None, "critical": True})
                             return
 
                         img_bytes, img_mime = apply_carousel_index_badge(img_bytes, img_mime, idx=idx, total=min(approve_max_slides, len(carousel_slides)))
