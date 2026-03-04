@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ION Capital — Inicio Demo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ionNavy: '#071329',
+            ionBlue: '#0B1F3F',
+            ionGold: '#BFA36A',
+            ionText: '#E8EEF8'
+          },
+          boxShadow: {
+            soft: '0 10px 30px rgba(2,8,23,.25)'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .glass {
+      backdrop-filter: blur(10px);
+      background: rgba(7,19,41,.42);
+      box-shadow: 0 0 0 rgba(2,8,23,0);
+      transition: background-color .35s ease, backdrop-filter .35s ease, box-shadow .35s ease, border-color .35s ease;
+    }
+    .glass.scrolled {
+      background: rgba(7,19,41,.78);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 10px 24px rgba(2,8,23,.28);
+      border-color: rgba(255,255,255,.14);
+    }
+    .fade-lr:before,.fade-lr:after{content:'';position:absolute;top:0;bottom:0;width:72px;z-index:10;pointer-events:none}
+    .fade-lr:before{left:0;background:linear-gradient(90deg,#071329 0%,transparent 100%)}
+    .fade-lr:after{right:0;background:linear-gradient(270deg,#071329 0%,transparent 100%)}
+
+    .ticker-track {
+      width: max-content;
+      will-change: transform;
+      transform: translate3d(0,0,0);
+    }
+
+    .micro-card { transition: transform .28s cubic-bezier(.22,.61,.36,1), box-shadow .28s, background-color .28s; }
+    .micro-card:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(2,8,23,.28); }
+
+    .nav-link { position: relative; }
+    .nav-link:after { content:''; position:absolute; left:0; bottom:-6px; width:0; height:1px; background:#BFA36A; transition: width .25s ease; }
+    .nav-link:hover:after { width:100%; }
+
+    .cta-btn { position: relative; overflow: hidden; }
+    .cta-btn:before { content:''; position:absolute; inset:-200% auto -200% -40%; width:34%; transform: rotate(18deg); background: linear-gradient(90deg, transparent, rgba(255,255,255,.38), transparent); transition: transform .7s ease; }
+    .cta-btn:hover:before { transform: translateX(360%) rotate(18deg); }
+  </style>
+</head>
+<body class="bg-ionNavy text-ionText antialiased">
+  <!-- NAV -->
+  <header id="topNav" class="sticky top-0 z-50 glass border-b border-white/10">
+    <div class="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <img src="./ion-logo-transparent.png" alt="In On Capital" class="h-14 md:h-16 w-auto object-contain" />
+      </div>
+      <nav class="hidden md:flex items-center gap-8 text-sm text-slate-200/90">
+        <a href="#" class="nav-link hover:text-white">Inicio</a>
+        <a href="#" class="nav-link hover:text-white">Mercados</a>
+        <a href="#" class="nav-link hover:text-white">Productos</a>
+        <a href="#" class="nav-link hover:text-white">Análisis</a>
+        <a href="#" class="nav-link hover:text-white">Contacto</a>
+      </nav>
+      <button class="text-sm px-4 py-2 rounded-md bg-ionGold text-slate-900 font-medium hover:opacity-90 transition">Acceso Clientes</button>
+    </div>
+  </header>
+
+  <!-- HERO -->
+  <section class="relative overflow-hidden border-b border-white/10">
+    <div class="absolute inset-0 bg-[url('./panama-night.png')] bg-cover bg-center md:bg-top opacity-45"></div>
+    <div class="absolute inset-0 bg-gradient-to-r from-ionNavy via-ionNavy/80 to-transparent"></div>
+    <div class="relative max-w-7xl mx-auto px-6 py-24 md:py-32">
+      <p class="text-ionGold uppercase tracking-[0.25em] text-xs mb-4">PLATAFORMA PATRIMONIAL INSTITUCIONAL</p>
+      <h1 class="text-5xl md:text-7xl font-semibold leading-tight max-w-3xl">Acceso a Mercados Globales, <span class="text-ionGold">Diseñado para Panamá</span>.</h1>
+      <p class="mt-6 max-w-2xl text-slate-200/90 text-xl md:text-2xl">Una experiencia de inversión premium para clientes de alto patrimonio e institucionales: acciones, renta fija y análisis estratégico en una sola plataforma moderna.</p>
+      <div class="mt-10 flex flex-wrap gap-4">
+        <button class="cta-btn px-6 py-3 rounded-md bg-ionGold text-slate-900 font-semibold shadow-soft hover:translate-y-[-1px] transition">Abrir Cuenta</button>
+        <button class="px-6 py-3 rounded-md border border-white/25 hover:bg-white/10 transition">Agendar Reunión Estratégica</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRIMARY STOCK TICKER -->
+  <section class="relative fade-lr border-b border-white/10">
+    <div class="max-w-7xl mx-auto px-6 py-3 text-xs uppercase tracking-widest text-slate-300">Ticker Principal de Mercado</div>
+    <div class="ticker-wrap relative overflow-hidden pb-4" id="stockTickerWrap">
+      <div class="ticker-track flex gap-3 px-6" id="stockTicker"></div>
+    </div>
+  </section>
+
+  <!-- SECONDARY BOND TICKER -->
+  <section class="relative fade-lr border-b border-white/10 bg-ionBlue/40">
+    <div class="max-w-7xl mx-auto px-6 py-2 text-[11px] uppercase tracking-widest text-slate-300">Resumen de Mercado de Bonos</div>
+    <div class="ticker-wrap relative overflow-hidden pb-3" id="bondTickerWrap">
+      <div class="ticker-track flex gap-2 px-6" id="bondTicker"></div>
+    </div>
+  </section>
+
+  <!-- NEWS -->
+  <section class="max-w-7xl mx-auto px-6 py-12">
+    <div class="flex items-end justify-between mb-6">
+      <h2 class="text-3xl md:text-4xl font-semibold">Noticias y Análisis Financieros</h2>
+      <a href="#" class="text-ionGold text-sm">Ver todo</a>
+    </div>
+
+    <div class="grid md:grid-cols-3 gap-6">
+      <article class="micro-card bg-white/5 border border-white/10 rounded-xl p-5 hover:bg-white/10 transition">
+        <p class="text-xs text-ionGold uppercase tracking-wider mb-2">MACRO</p>
+        <h3 class="font-semibold text-lg leading-snug">El IPC de EE. UU. sorprende a la baja e impulsa activos de riesgo.</h3>
+        <p class="text-slate-300 mt-3 text-sm">Las acciones y los instrumentos sensibles a duración repuntaron tras datos de inflación más moderados.</p>
+      </article>
+      <article class="micro-card bg-white/5 border border-white/10 rounded-xl p-5 hover:bg-white/10 transition">
+        <p class="text-xs text-ionGold uppercase tracking-wider mb-2">RENTA FIJA</p>
+        <h3 class="font-semibold text-lg leading-snug">Los spreads grado de inversión se estrechan ante fuerte demanda de emisiones.</h3>
+        <p class="text-slate-300 mt-3 text-sm">Los flujos hacia bonos corporativos se mantienen sólidos en mandatos en USD y agregados globales.</p>
+      </article>
+      <article class="micro-card bg-white/5 border border-white/10 rounded-xl p-5 hover:bg-white/10 transition">
+        <p class="text-xs text-ionGold uppercase tracking-wider mb-2">ACCIONES</p>
+        <h3 class="font-semibold text-lg leading-snug">Los resultados de mega-cap mantienen el impulso en sectores ligados a IA.</h3>
+        <p class="text-slate-300 mt-3 text-sm">El crecimiento de calidad continúa liderando, mientras defensivos rotan de forma selectiva.</p>
+      </article>
+    </div>
+  </section>
+
+  <footer class="border-t border-white/10 py-6 text-center text-xs text-slate-400">Demo para presentación ejecutiva — ION Capital</footer>
+
+  <script>
+    const stocks = [
+      'AAPL','MSFT','NVDA','GOOGL','AMZN','META','TSLA','JPM','GS','V','MA','KO','PEP','DIS','NFLX','INTC','AMD','ORCL','ADBE','CRM'
+    ].map((s, i) => {
+      const base = [182.34, 419.77, 890.21, 151.92, 176.05, 491.11, 204.16, 198.22, 392.11, 282.44, 457.09, 60.13, 170.72, 111.38, 601.09, 43.22, 178.11, 125.77, 598.41, 304.88][i]
+      const ch = ((Math.random() * 4) - 2)
+      const pct = (ch / base) * 100
+      return { symbol: s, price: base, change: ch, pct }
+    })
+
+    const bonds = [
+      { name: 'Tesoro EE. UU. 10A', yield: 4.23, change: -0.03 },
+      { name: 'Bono Corporativo EE. UU. AAA', yield: 5.01, change: 0.02 },
+      { name: 'Bono de Mercados Emergentes', yield: 6.44, change: 0.04 },
+      { name: 'Bono Global Agregado', yield: 3.67, change: -0.01 }
+    ]
+
+    function stockCard(x){
+      const pos = x.change >= 0
+      const c = pos ? 'text-emerald-400' : 'text-rose-400'
+      const sign = pos ? '+' : ''
+      return `
+        <div class="micro-card min-w-[220px] bg-white/5 border border-white/10 rounded-lg p-3 hover:bg-white/10 transition">
+          <div class="flex justify-between items-center">
+            <span class="font-semibold">${x.symbol}</span>
+            <span class="text-base ${c}">${sign}${x.pct.toFixed(2)}%</span>
+          </div>
+          <div class="mt-1 text-xl font-semibold">$${x.price.toFixed(2)}</div>
+          <div class="text-base ${c}">${sign}${x.change.toFixed(2)}</div>
+        </div>`
+    }
+
+    function bondCard(x){
+      const pos = x.change >= 0
+      const c = pos ? 'text-emerald-400' : 'text-rose-400'
+      const sign = pos ? '+' : ''
+      return `
+      <div class="micro-card min-w-[280px] bg-white/5 border border-white/10 rounded-md px-3 py-2 text-sm">
+        <div class="font-medium">${x.name}</div>
+        <div class="flex justify-between mt-1 text-slate-300">
+          <span>Rend.: <span class="text-white">${x.yield.toFixed(2)}%</span></span>
+          <span class="${c}">${sign}${x.change.toFixed(2)}%</span>
+        </div>
+      </div>`
+    }
+
+    function mountTicker(el, cards){
+      const html = cards.join('')
+      const COPIES = 6
+      el.innerHTML = Array.from({length: COPIES}, () => html).join('')
+
+      const speed = el.id === 'stockTicker' ? 66 : 34 // px/sec
+      let offset = 0
+      let paused = false
+      let lastTs = 0
+      let single = 0
+
+      const recalc = () => {
+        single = el.scrollWidth / COPIES
+      }
+
+      const onEnter = () => { paused = true }
+      const onLeave = () => { paused = false }
+      el.parentElement?.addEventListener('mouseenter', onEnter)
+      el.parentElement?.addEventListener('mouseleave', onLeave)
+      window.addEventListener('resize', recalc)
+
+      const step = (ts) => {
+        if (!lastTs) lastTs = ts
+        const dt = (ts - lastTs) / 1000
+        lastTs = ts
+
+        if (!paused && single > 0) {
+          offset -= speed * dt
+          if (offset <= -single) offset += single
+          el.style.transform = `translate3d(${offset.toFixed(3)}px,0,0)`
+        }
+        requestAnimationFrame(step)
+      }
+
+      requestAnimationFrame(() => {
+        recalc()
+        requestAnimationFrame(step)
+      })
+    }
+
+    mountTicker(document.getElementById('stockTicker'), stocks.map(stockCard))
+    mountTicker(document.getElementById('bondTicker'), bonds.map(bondCard))
+
+    // Glass navbar scroll state
+    const topNav = document.getElementById('topNav')
+    const applyNavState = () => {
+      if (!topNav) return
+      if (window.scrollY > 16) topNav.classList.add('scrolled')
+      else topNav.classList.remove('scrolled')
+    }
+    applyNavState()
+    window.addEventListener('scroll', applyNavState, { passive: true })
+  </script>
+</body>
+</html>
