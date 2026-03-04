@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ION Capital — Productos de Inversión</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ionNavy: '#071329',
+            ionBlue: '#0B1F3F',
+            ionGold: '#BFA36A',
+            ionText: '#E8EEF8'
+          },
+          boxShadow: { soft: '0 10px 30px rgba(2,8,23,.25)' }
+        }
+      }
+    }
+  </script>
+  <style>
+    .glass { backdrop-filter: blur(12px); background: rgba(7,19,41,.65); transition: .35s ease; }
+    .glass.scrolled { background: rgba(7,19,41,.85); box-shadow: 0 10px 24px rgba(2,8,23,.3); }
+    .card { position: relative; overflow: hidden; transition: transform .26s cubic-bezier(.22,.61,.36,1), box-shadow .26s, border-color .26s; }
+    .card:before { content:''; position:absolute; inset:0; pointer-events:none; background:linear-gradient(130deg, rgba(255,255,255,.06), transparent 35%); }
+    .card:hover { transform: translateY(-3px); box-shadow: 0 16px 34px rgba(2,8,23,.34); border-color: rgba(191,163,106,.35); }
+    .nav-link{position:relative}.nav-link:after{content:'';position:absolute;left:0;bottom:-6px;width:0;height:1px;background:#BFA36A;transition:.24s}.nav-link:hover:after{width:100%}
+    .chip { border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.04); }
+  </style>
+</head>
+<body class="bg-ionNavy text-ionText antialiased">
+  <header id="topNav" class="sticky top-0 z-50 glass border-b border-white/10">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
+      <a href="../ion-home/" class="px-2.5 py-1.5 rounded-xl bg-white/95 ring-1 ring-slate-300/80 shadow-[0_10px_26px_rgba(0,0,0,.35)]">
+        <img src="./ion-logo-white-bg.jpg" alt="In On Capital" class="h-12 md:h-14 w-auto object-contain" />
+      </a>
+      <nav class="hidden md:flex items-center gap-8 text-sm text-slate-200/90">
+        <a href="../ion-home/" class="nav-link hover:text-white">Inicio</a>
+        <a href="#" class="nav-link hover:text-white">Mercados</a>
+        <a href="../ion-productos/" class="nav-link hover:text-white text-white">Productos</a>
+        <a href="#" class="nav-link hover:text-white">Análisis</a>
+        <a href="#" class="nav-link hover:text-white">Contacto</a>
+      </nav>
+      <a href="../ion-portal/" class="text-xs md:text-sm px-4 py-2 rounded-md bg-ionGold text-slate-900 font-semibold hover:opacity-90 transition whitespace-nowrap">Acceso Clientes</a>
+    </div>
+  </header>
+
+  <section class="relative overflow-hidden border-b border-white/10">
+    <div class="absolute inset-0 bg-[url('./panama-night.png')] bg-cover bg-center opacity-40"></div>
+    <div class="absolute inset-0 bg-gradient-to-r from-ionNavy via-ionNavy/85 to-transparent"></div>
+    <div class="relative max-w-7xl mx-auto px-6 py-24 md:py-28">
+      <p class="text-ionGold uppercase tracking-[.24em] text-xs mb-3">Oferta Institucional</p>
+      <h1 class="text-4xl md:text-6xl font-semibold leading-tight max-w-3xl">Productos de Inversión</h1>
+      <p class="mt-5 max-w-3xl text-slate-200/90 text-lg md:text-xl">Acceso a oportunidades globales en acciones, renta fija y estrategias gestionadas para inversionistas sofisticados.</p>
+    </div>
+  </section>
+
+  <main class="max-w-7xl mx-auto px-6 py-10 space-y-10">
+    <section>
+      <div class="grid md:grid-cols-2 gap-6">
+        <article class="card bg-white/5 border border-white/10 rounded-xl p-6 md:p-7">
+          <p class="text-ionGold text-xs uppercase tracking-wider">Acciones</p>
+          <h3 class="text-2xl font-semibold mt-2">Acciones Globales</h3>
+          <p class="text-slate-300 mt-3">Acceso a las principales compañías del mundo en mercados desarrollados y emergentes.</p>
+          <div class="mt-5 flex flex-wrap gap-2 text-xs text-slate-200">
+            <span class="chip rounded-full px-3 py-1">Apple</span><span class="chip rounded-full px-3 py-1">Microsoft</span><span class="chip rounded-full px-3 py-1">NVIDIA</span><span class="chip rounded-full px-3 py-1">Amazon</span>
+          </div>
+          <button class="mt-6 px-4 py-2 rounded-md bg-ionGold text-slate-900 font-semibold text-sm hover:opacity-90 transition">Explorar Estrategia</button>
+        </article>
+
+        <article class="card bg-white/5 border border-white/10 rounded-xl p-6 md:p-7">
+          <p class="text-ionGold text-xs uppercase tracking-wider">Bonos</p>
+          <h3 class="text-2xl font-semibold mt-2">Renta Fija Global</h3>
+          <p class="text-slate-300 mt-3">Bonos soberanos y corporativos para preservación de capital y generación de ingresos.</p>
+          <div class="mt-5 flex flex-wrap gap-2 text-xs text-slate-200">
+            <span class="chip rounded-full px-3 py-1">Bonos del Tesoro de EE. UU.</span><span class="chip rounded-full px-3 py-1">Bonos Corporativos</span><span class="chip rounded-full px-3 py-1">Deuda de Mercados Emergentes</span>
+          </div>
+        </article>
+
+        <article class="card bg-white/5 border border-white/10 rounded-xl p-6 md:p-7">
+          <p class="text-ionGold text-xs uppercase tracking-wider">Gestión Profesional</p>
+          <h3 class="text-2xl font-semibold mt-2">Portafolios Gestionados</h3>
+          <p class="text-slate-300 mt-3">Estrategias diversificadas administradas por especialistas de inversión.</p>
+          <div class="mt-5 flex flex-wrap gap-2 text-xs text-slate-200">
+            <span class="chip rounded-full px-3 py-1">balance</span><span class="chip rounded-full px-3 py-1">ingresos</span><span class="chip rounded-full px-3 py-1">crecimiento</span>
+          </div>
+        </article>
+
+        <article class="card bg-white/5 border border-white/10 rounded-xl p-6 md:p-7">
+          <p class="text-ionGold text-xs uppercase tracking-wider">Asesoría Patrimonial</p>
+          <h3 class="text-2xl font-semibold mt-2">Asesoría Patrimonial</h3>
+          <p class="text-slate-300 mt-3">Planeación estratégica para clientes de alto patrimonio e instituciones.</p>
+          <div class="mt-5 flex flex-wrap gap-2 text-xs text-slate-200">
+            <span class="chip rounded-full px-3 py-1">asignación de activos</span><span class="chip rounded-full px-3 py-1">preservación patrimonial</span><span class="chip rounded-full px-3 py-1">crecimiento de largo plazo</span>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="card bg-white/5 border border-white/10 rounded-xl p-6">
+      <h3 class="text-2xl font-semibold mb-4">Mercados Hoy</h3>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+        <div class="bg-white/5 border border-white/10 rounded-lg p-4"><p class="text-slate-300">S&P 500</p><p class="text-2xl mt-1 font-semibold">5,118</p><p class="text-emerald-400">+0.62%</p></div>
+        <div class="bg-white/5 border border-white/10 rounded-lg p-4"><p class="text-slate-300">NASDAQ</p><p class="text-2xl mt-1 font-semibold">16,224</p><p class="text-emerald-400">+0.88%</p></div>
+        <div class="bg-white/5 border border-white/10 rounded-lg p-4"><p class="text-slate-300">DOW JONES</p><p class="text-2xl mt-1 font-semibold">39,780</p><p class="text-rose-400">-0.14%</p></div>
+        <div class="bg-white/5 border border-white/10 rounded-lg p-4"><p class="text-slate-300">MSCI Emerging Markets</p><p class="text-2xl mt-1 font-semibold">1,032</p><p class="text-emerald-400">+0.39%</p></div>
+      </div>
+    </section>
+
+    <section class="rounded-2xl border border-white/10 bg-gradient-to-r from-white/6 via-white/[.03] to-transparent p-7 md:p-9 text-center">
+      <h3 class="text-3xl md:text-4xl font-semibold">Comienza tu estrategia de inversión.</h3>
+      <div class="mt-6 flex flex-wrap gap-4 justify-center">
+        <button class="px-6 py-3 rounded-md bg-ionGold text-slate-900 font-semibold hover:opacity-90 transition">Abrir Cuenta</button>
+        <button class="px-6 py-3 rounded-md border border-white/25 hover:bg-white/10 transition">Agendar Reunión</button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const topNav = document.getElementById('topNav')
+    const onScroll = () => window.scrollY > 16 ? topNav.classList.add('scrolled') : topNav.classList.remove('scrolled')
+    onScroll(); window.addEventListener('scroll', onScroll, { passive: true })
+  </script>
+</body>
+</html>

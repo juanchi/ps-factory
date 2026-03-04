@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ION Capital — Análisis de Mercados</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ionNavy: '#071329', ionBlue: '#0B1F3F', ionGold: '#BFA36A', ionText: '#E8EEF8'
+          },
+          boxShadow: { soft: '0 10px 30px rgba(2,8,23,.25)' }
+        }
+      }
+    }
+  </script>
+  <style>
+    .glass { backdrop-filter: blur(12px); background: rgba(7,19,41,.65); transition: .35s ease; }
+    .glass.scrolled { background: rgba(7,19,41,.85); box-shadow: 0 10px 24px rgba(2,8,23,.3); }
+    .card { position:relative; overflow:hidden; transition: transform .25s cubic-bezier(.22,.61,.36,1), box-shadow .25s, border-color .25s; }
+    .card:before { content:''; position:absolute; inset:0; pointer-events:none; background:linear-gradient(135deg, rgba(255,255,255,.06), transparent 35%); }
+    .card:hover { transform: translateY(-3px); box-shadow: 0 16px 34px rgba(2,8,23,.34); border-color: rgba(191,163,106,.35); }
+    .nav-link{position:relative}.nav-link:after{content:'';position:absolute;left:0;bottom:-6px;width:0;height:1px;background:#BFA36A;transition:.24s}.nav-link:hover:after{width:100%}
+  </style>
+</head>
+<body class="bg-ionNavy text-ionText antialiased">
+  <header id="topNav" class="sticky top-0 z-50 glass border-b border-white/10">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
+      <a href="../ion-home/" class="px-2.5 py-1.5 rounded-xl bg-white/95 ring-1 ring-slate-300/80 shadow-[0_10px_26px_rgba(0,0,0,.35)]">
+        <img src="./ion-logo-white-bg.jpg" alt="In On Capital" class="h-12 md:h-14 w-auto object-contain" />
+      </a>
+      <nav class="hidden md:flex items-center gap-8 text-sm text-slate-200/90">
+        <a href="../ion-home/" class="nav-link hover:text-white">Inicio</a>
+        <a href="#" class="nav-link hover:text-white">Mercados</a>
+        <a href="../ion-productos/" class="nav-link hover:text-white">Productos</a>
+        <a href="../ion-analisis/" class="nav-link hover:text-white text-white">Análisis</a>
+        <a href="#" class="nav-link hover:text-white">Contacto</a>
+      </nav>
+      <a href="../ion-portal/" class="text-xs md:text-sm px-4 py-2 rounded-md bg-ionGold text-slate-900 font-semibold hover:opacity-90 transition whitespace-nowrap">Acceso Clientes</a>
+    </div>
+  </header>
+
+  <section class="relative overflow-hidden border-b border-white/10">
+    <div class="absolute inset-0 bg-[url('./panama-night.png')] bg-cover bg-center opacity-40"></div>
+    <div class="absolute inset-0 bg-gradient-to-r from-ionNavy via-ionNavy/85 to-transparent"></div>
+    <div class="relative max-w-7xl mx-auto px-6 py-24 md:py-28">
+      <p class="text-ionGold uppercase tracking-[.24em] text-xs mb-3">Investigación y Análisis</p>
+      <h1 class="text-4xl md:text-6xl font-semibold leading-tight max-w-3xl">Análisis de Mercados</h1>
+      <p class="mt-5 max-w-3xl text-slate-200/90 text-lg md:text-xl">Perspectivas estratégicas sobre economía global, renta fija y mercados accionarios.</p>
+    </div>
+  </section>
+
+  <main class="max-w-7xl mx-auto px-6 py-10 space-y-10">
+    <section class="card bg-white/5 border border-white/10 rounded-xl overflow-hidden">
+      <div class="grid md:grid-cols-2">
+        <div class="min-h-[260px] bg-[url('https://images.unsplash.com/photo-1677442136019-21780ecad995?q=80&w=1600&auto=format&fit=crop')] bg-cover bg-center"></div>
+        <div class="p-6 md:p-8">
+          <p class="text-ionGold uppercase text-xs tracking-wider">Análisis Destacado</p>
+          <h2 class="text-2xl md:text-3xl font-semibold mt-2">La inteligencia artificial impulsa el nuevo ciclo tecnológico.</h2>
+          <p class="text-slate-300 mt-4">La aceleración en inversión de infraestructura, semiconductores y productividad empresarial está reconfigurando el liderazgo sectorial en mercados globales.</p>
+          <button class="mt-6 px-5 py-2.5 rounded-md bg-ionGold text-slate-900 font-semibold hover:opacity-90 transition">Leer Análisis</button>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="grid md:grid-cols-3 gap-6">
+        <article class="card bg-white/5 border border-white/10 rounded-xl p-6">
+          <p class="text-ionGold text-xs uppercase tracking-wider">Macro</p>
+          <h3 class="text-xl font-semibold mt-2">Inflación en EE. UU. sorprende a la baja.</h3>
+          <p class="text-slate-300 mt-3 text-sm">Menor presión inflacionaria mejora el escenario para activos de riesgo y alivia expectativas de tasas.</p>
+        </article>
+        <article class="card bg-white/5 border border-white/10 rounded-xl p-6">
+          <p class="text-ionGold text-xs uppercase tracking-wider">Renta Fija</p>
+          <h3 class="text-xl font-semibold mt-2">Los spreads corporativos se mantienen sólidos.</h3>
+          <p class="text-slate-300 mt-3 text-sm">La demanda institucional continúa respaldando crédito de alta calidad en USD y mandatos globales.</p>
+        </article>
+        <article class="card bg-white/5 border border-white/10 rounded-xl p-6">
+          <p class="text-ionGold text-xs uppercase tracking-wider">Acciones</p>
+          <h3 class="text-xl font-semibold mt-2">Mega-caps lideran el rally tecnológico.</h3>
+          <p class="text-slate-300 mt-3 text-sm">Resultados robustos y momentum en IA sostienen desempeño relativo frente al resto del mercado.</p>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="text-2xl font-semibold mb-4">Reportes Institucionales</h3>
+      <div class="grid md:grid-cols-3 gap-4">
+        <article class="card bg-white/5 border border-white/10 rounded-xl p-5 flex items-center justify-between gap-4">
+          <div>
+            <p class="text-sm text-slate-300">PDF</p>
+            <p class="font-semibold">Perspectiva Global de Mercados Q3</p>
+          </div>
+          <button class="px-4 py-2 rounded-md border border-ionGold/60 text-ionGold text-sm hover:bg-ionGold/10 transition">Descargar</button>
+        </article>
+        <article class="card bg-white/5 border border-white/10 rounded-xl p-5 flex items-center justify-between gap-4">
+          <div>
+            <p class="text-sm text-slate-300">PDF</p>
+            <p class="font-semibold">Reporte de Mercados Emergentes</p>
+          </div>
+          <button class="px-4 py-2 rounded-md border border-ionGold/60 text-ionGold text-sm hover:bg-ionGold/10 transition">Descargar</button>
+        </article>
+        <article class="card bg-white/5 border border-white/10 rounded-xl p-5 flex items-center justify-between gap-4">
+          <div>
+            <p class="text-sm text-slate-300">PDF</p>
+            <p class="font-semibold">Estrategia de Renta Fija</p>
+          </div>
+          <button class="px-4 py-2 rounded-md border border-ionGold/60 text-ionGold text-sm hover:bg-ionGold/10 transition">Descargar</button>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h3 class="text-2xl font-semibold mb-4">Noticias de Mercado</h3>
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <article class="card bg-white/5 border border-white/10 rounded-xl p-5"><p class="text-xs text-ionGold uppercase">Macro</p><h4 class="font-semibold mt-2">La Reserva Federal mantiene postura dependiente de datos.</h4><p class="text-slate-300 text-sm mt-2">El mercado ajusta probabilidades de recortes para el segundo semestre.</p></article>
+        <article class="card bg-white/5 border border-white/10 rounded-xl p-5"><p class="text-xs text-ionGold uppercase">Renta Fija</p><h4 class="font-semibold mt-2">Curva de rendimientos muestra mayor estabilidad.</h4><p class="text-slate-300 text-sm mt-2">La volatilidad en tramos medios disminuye tras datos macro mixtos.</p></article>
+        <article class="card bg-white/5 border border-white/10 rounded-xl p-5"><p class="text-xs text-ionGold uppercase">Acciones</p><h4 class="font-semibold mt-2">Tecnología y salud destacan en desempeño relativo.</h4><p class="text-slate-300 text-sm mt-2">Flujos defensivos se combinan con exposición a crecimiento de calidad.</p></article>
+        <article class="card bg-white/5 border border-white/10 rounded-xl p-5"><p class="text-xs text-ionGold uppercase">Global</p><h4 class="font-semibold mt-2">Europa revisa perspectivas de crecimiento.</h4><p class="text-slate-300 text-sm mt-2">Mejores indicadores de confianza empresarial apoyan activos regionales.</p></article>
+        <article class="card bg-white/5 border border-white/10 rounded-xl p-5"><p class="text-xs text-ionGold uppercase">Commodities</p><h4 class="font-semibold mt-2">Petróleo se estabiliza en rango técnico.</h4><p class="text-slate-300 text-sm mt-2">Expectativas de demanda y oferta mantienen balance de corto plazo.</p></article>
+        <article class="card bg-white/5 border border-white/10 rounded-xl p-5"><p class="text-xs text-ionGold uppercase">Divisas</p><h4 class="font-semibold mt-2">Dólar cede frente a cesta de monedas.</h4><p class="text-slate-300 text-sm mt-2">La caída de rendimientos reales favorece monedas de riesgo selectivo.</p></article>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const topNav = document.getElementById('topNav')
+    const onScroll = () => window.scrollY > 16 ? topNav.classList.add('scrolled') : topNav.classList.remove('scrolled')
+    onScroll(); window.addEventListener('scroll', onScroll, { passive: true })
+  </script>
+</body>
+</html>
