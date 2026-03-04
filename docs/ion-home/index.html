@@ -55,6 +55,8 @@
     .cta-btn { position: relative; overflow: hidden; }
     .cta-btn:before { content:''; position:absolute; inset:-200% auto -200% -40%; width:34%; transform: rotate(18deg); background: linear-gradient(90deg, transparent, rgba(255,255,255,.38), transparent); transition: transform .7s ease; }
     .cta-btn:hover:before { transform: translateX(360%) rotate(18deg); }
+    .mobile-nav-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+    .mobile-nav-scroll::-webkit-scrollbar { display: none; }
   </style>
 </head>
 <body class="bg-ionNavy text-ionText antialiased">
@@ -62,7 +64,9 @@
   <header id="topNav" class="sticky top-0 z-50 glass border-b border-white/10">
     <div class="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <img src="./ion-logo-transparent.png" alt="In On Capital" class="h-14 md:h-16 w-auto object-contain" />
+        <div class="px-2.5 py-1.5 rounded-xl bg-white/95 ring-1 ring-slate-300/80 shadow-[0_10px_26px_rgba(0,0,0,.35)]">
+          <img src="./ion-logo-white-bg.jpg" alt="In On Capital" class="h-14 md:h-16 w-auto object-contain" />
+        </div>
       </div>
       <nav class="hidden md:flex items-center gap-8 text-sm text-slate-200/90">
         <a href="#" class="nav-link hover:text-white">Inicio</a>
@@ -71,7 +75,20 @@
         <a href="#" class="nav-link hover:text-white">Análisis</a>
         <a href="#" class="nav-link hover:text-white">Contacto</a>
       </nav>
-      <button class="text-sm px-4 py-2 rounded-md bg-ionGold text-slate-900 font-medium hover:opacity-90 transition">Acceso Clientes</button>
+      <button class="text-xs md:text-sm px-3 md:px-4 py-2 rounded-md bg-ionGold text-slate-900 font-medium hover:opacity-90 transition whitespace-nowrap">Acceso Clientes</button>
+    </div>
+
+    <!-- Mobile nav links -->
+    <div class="md:hidden border-t border-white/10">
+      <div class="mobile-nav-scroll overflow-x-auto px-4 py-2">
+        <div class="flex gap-2 min-w-max">
+          <a href="#" class="px-3 py-1.5 rounded-full border border-white/20 text-xs text-slate-100/95 whitespace-nowrap">Inicio</a>
+          <a href="#" class="px-3 py-1.5 rounded-full border border-white/20 text-xs text-slate-100/95 whitespace-nowrap">Mercados</a>
+          <a href="#" class="px-3 py-1.5 rounded-full border border-white/20 text-xs text-slate-100/95 whitespace-nowrap">Productos</a>
+          <a href="#" class="px-3 py-1.5 rounded-full border border-white/20 text-xs text-slate-100/95 whitespace-nowrap">Análisis</a>
+          <a href="#" class="px-3 py-1.5 rounded-full border border-white/20 text-xs text-slate-100/95 whitespace-nowrap">Contacto</a>
+        </div>
+      </div>
     </div>
   </header>
 
