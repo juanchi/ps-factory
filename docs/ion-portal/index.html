@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ION Capital — Portal de Cliente (Demo)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ionNavy: '#071329',
+            ionBlue: '#0B1F3F',
+            ionGold: '#BFA36A',
+            ionText: '#E8EEF8'
+          },
+          boxShadow: {
+            soft: '0 10px 30px rgba(2,8,23,.25)'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .glass { backdrop-filter: blur(14px); background: linear-gradient(180deg, rgba(7,19,41,.58), rgba(7,19,41,.72)); transition: .35s ease; }
+    .glass.scrolled { background: linear-gradient(180deg, rgba(7,19,41,.78), rgba(7,19,41,.9)); box-shadow: 0 12px 30px rgba(2,8,23,.35); }
+    .card { position:relative; overflow:hidden; transition: transform .26s cubic-bezier(.22,.61,.36,1), box-shadow .26s, background-color .26s, border-color .26s; }
+    .card:before{content:''; position:absolute; inset:0; pointer-events:none; background:linear-gradient(135deg, rgba(255,255,255,.06), transparent 35%); opacity:.45}
+    .card:hover { transform: translateY(-3px); box-shadow: 0 16px 34px rgba(2,8,23,.34); border-color: rgba(191,163,106,.35); }
+    .nav-link{position:relative}.nav-link:after{content:'';position:absolute;left:0;bottom:-6px;width:0;height:1px;background:#BFA36A;transition:.24s}.nav-link:hover:after{width:100%}
+  </style>
+</head>
+<body class="bg-ionNavy text-ionText antialiased">
+  <header id="topNav" class="sticky top-0 z-50 glass border-b border-white/10">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
+      <div class="px-2.5 py-1.5 rounded-xl bg-white/95 ring-1 ring-slate-300/80 shadow-[0_10px_26px_rgba(0,0,0,.35)]">
+        <img src="./ion-logo-white-bg.jpg" alt="In On Capital" class="h-12 md:h-14 w-auto object-contain" />
+      </div>
+      <nav class="hidden md:flex items-center gap-8 text-sm text-slate-200/90">
+        <a href="#" class="nav-link hover:text-white">Inicio</a>
+        <a href="#" class="nav-link hover:text-white">Mercados</a>
+        <a href="#" class="nav-link hover:text-white">Productos</a>
+        <a href="#" class="nav-link hover:text-white">Análisis</a>
+        <a href="#" class="nav-link hover:text-white">Contacto</a>
+      </nav>
+      <button class="text-xs md:text-sm px-4 py-2 rounded-md bg-ionGold text-slate-900 font-semibold hover:opacity-90 transition whitespace-nowrap">Acceso Clientes</button>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-6 py-8 md:py-10 space-y-8">
+    <section class="rounded-2xl border border-white/10 bg-gradient-to-r from-white/7 via-white/[.04] to-transparent p-6 md:p-9 shadow-soft">
+      <p class="text-ionGold uppercase tracking-[.22em] text-xs mb-3">Portal de Cliente</p>
+      <h1 class="text-3xl md:text-5xl font-semibold">Bienvenido, Juan</h1>
+      <p class="text-slate-300 mt-2">Resumen de Portafolio</p>
+      <div class="mt-6 flex flex-wrap items-end gap-6 md:gap-10">
+        <div>
+          <p class="text-slate-300 text-sm">Total Portfolio Value</p>
+          <p class="text-4xl md:text-5xl font-semibold mt-1 tracking-tight">$1,284,520</p>
+        </div>
+        <div>
+          <p class="text-slate-300 text-sm">Performance</p>
+          <p class="text-2xl font-semibold text-emerald-400 mt-1">+4.2% YTD</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-2xl font-semibold mb-4">Portfolio Overview</h2>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <article class="card bg-white/5 border border-white/10 rounded-xl p-5">
+          <p class="text-slate-300 text-sm">Portfolio Value</p>
+          <p class="text-2xl font-semibold mt-2">$1,284,520</p>
+        </article>
+        <article class="card bg-white/5 border border-white/10 rounded-xl p-5">
+          <p class="text-slate-300 text-sm">Year to Date Return</p>
+          <p class="text-2xl font-semibold text-emerald-400 mt-2">+4.2%</p>
+        </article>
+        <article class="card bg-white/5 border border-white/10 rounded-xl p-5">
+          <p class="text-slate-300 text-sm">Income Generated</p>
+          <p class="text-2xl font-semibold mt-2">$32,410</p>
+        </article>
+        <article class="card bg-white/5 border border-white/10 rounded-xl p-5">
+          <p class="text-slate-300 text-sm">Asset Allocation</p>
+          <p class="text-2xl font-semibold mt-2">Diversified</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="grid lg:grid-cols-3 gap-6">
+      <article class="lg:col-span-2 card bg-white/5 border border-white/10 rounded-xl p-5 md:p-6">
+        <div class="flex items-end justify-between mb-4">
+          <h3 class="text-xl font-semibold">Evolución del Portafolio</h3>
+          <span class="text-sm text-slate-300">Últimos 12 meses</span>
+        </div>
+        <div class="h-72"><canvas id="lineChart"></canvas></div>
+      </article>
+
+      <article class="card bg-white/5 border border-white/10 rounded-xl p-5 md:p-6">
+        <h3 class="text-xl font-semibold mb-4">Asset Allocation</h3>
+        <div class="h-64"><canvas id="pieChart"></canvas></div>
+        <ul class="mt-4 text-sm text-slate-300 space-y-1">
+          <li>Equities — 52%</li>
+          <li>Bonds — 30%</li>
+          <li>Cash — 10%</li>
+          <li>Alternatives — 8%</li>
+        </ul>
+      </article>
+    </section>
+
+    <section class="grid lg:grid-cols-3 gap-6">
+      <article class="lg:col-span-2 card bg-white/5 border border-white/10 rounded-xl p-5 md:p-6">
+        <h3 class="text-xl font-semibold mb-4">Holdings</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="text-slate-300 border-b border-white/10">
+              <tr>
+                <th class="text-left py-3">Asset</th>
+                <th class="text-left py-3">Type</th>
+                <th class="text-left py-3">Value</th>
+                <th class="text-left py-3">Performance</th>
+              </tr>
+            </thead>
+            <tbody class="[&_tr]:transition-colors [&_tr:hover]:bg-white/[0.03]">
+              <tr class="border-b border-white/5"><td class="py-3">AAPL</td><td>Equity</td><td>$120,000</td><td class="text-emerald-400">+12%</td></tr>
+              <tr class="border-b border-white/5"><td class="py-3">NVDA</td><td>Equity</td><td>$95,000</td><td class="text-emerald-400">+18%</td></tr>
+              <tr class="border-b border-white/5"><td class="py-3">US Treasury</td><td>Bond</td><td>$250,000</td><td class="text-emerald-400">+4%</td></tr>
+              <tr class="border-b border-white/5"><td class="py-3">Global Bond Fund</td><td>Bond</td><td>$180,000</td><td class="text-emerald-400">+3%</td></tr>
+              <tr><td class="py-3">TSLA</td><td>Equity</td><td>$66,000</td><td class="text-rose-400">-2%</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="card bg-white/5 border border-white/10 rounded-xl p-5 md:p-6">
+        <h3 class="text-xl font-semibold mb-4">Recent Activity</h3>
+        <div class="space-y-3 text-sm">
+          <div class="bg-white/5 border border-white/10 rounded-lg p-3">Compra NVDA — <span class="text-white">$20,000</span></div>
+          <div class="bg-white/5 border border-white/10 rounded-lg p-3">Venta TSLA — <span class="text-white">$15,000</span></div>
+          <div class="bg-white/5 border border-white/10 rounded-lg p-3">Dividendo MSFT — <span class="text-white">$1,200</span></div>
+          <div class="bg-white/5 border border-white/10 rounded-lg p-3">Rebalanceo Portafolio</div>
+        </div>
+      </article>
+    </section>
+
+    <section class="card bg-white/5 border border-white/10 rounded-xl p-5 md:p-6">
+      <h3 class="text-xl font-semibold mb-4">Market Snapshot</h3>
+      <div class="grid sm:grid-cols-3 gap-4 text-sm">
+        <div class="card bg-white/5 border border-white/10 rounded-lg p-4"><p class="text-slate-300">S&P 500</p><p class="text-xl mt-1 font-semibold">5,118</p><p class="text-emerald-400">+0.62%</p></div>
+        <div class="card bg-white/5 border border-white/10 rounded-lg p-4"><p class="text-slate-300">NASDAQ</p><p class="text-xl mt-1 font-semibold">16,224</p><p class="text-emerald-400">+0.88%</p></div>
+        <div class="card bg-white/5 border border-white/10 rounded-lg p-4"><p class="text-slate-300">DOW JONES</p><p class="text-xl mt-1 font-semibold">39,780</p><p class="text-rose-400">-0.14%</p></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const topNav = document.getElementById('topNav')
+    const onScroll = () => window.scrollY > 16 ? topNav.classList.add('scrolled') : topNav.classList.remove('scrolled')
+    onScroll(); window.addEventListener('scroll', onScroll, { passive: true })
+
+    const lineCtx = document.getElementById('lineChart')
+    new Chart(lineCtx, {
+      type: 'line',
+      data: {
+        labels: ['Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic','Ene','Feb'],
+        datasets: [{
+          label: 'Portafolio',
+          data: [980,1010,1035,1042,1080,1115,1132,1168,1190,1224,1250,1284],
+          borderColor: '#BFA36A',
+          backgroundColor: 'rgba(191,163,106,.15)',
+          fill: true,
+          tension: .35,
+          pointRadius: 0, pointHoverRadius: 4, borderWidth: 2.5
+        }]
+      },
+      options: {
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { backgroundColor: '#0B1F3F', borderColor:'#BFA36A', borderWidth:1, titleColor:'#fff', bodyColor:'#D8E1F0', padding:10 } },
+        animation: { duration: 1400, easing: 'easeOutCubic' },
+        scales: {
+          x: { ticks: { color: '#B8C3D6' }, grid: { color: 'rgba(255,255,255,.06)' } },
+          y: { ticks: { color: '#B8C3D6' }, grid: { color: 'rgba(255,255,255,.06)' } }
+        }
+      }
+    })
+
+    const pieCtx = document.getElementById('pieChart')
+    new Chart(pieCtx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Equities', 'Bonds', 'Cash', 'Alternatives'],
+        datasets: [{
+          data: [52,30,10,8],
+          backgroundColor: ['#BFA36A', '#3B82F6', '#64748B', '#10B981'],
+          borderColor: '#071329',
+          borderWidth: 2
+        }]
+      },
+      options: {
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: '#D3DCEC', boxWidth: 12, boxHeight: 12 }, position: 'bottom' },
+          tooltip: { backgroundColor: '#0B1F3F', borderColor:'#BFA36A', borderWidth:1, titleColor:'#fff', bodyColor:'#D8E1F0' }
+        },
+        animation: { duration: 1200, easing: 'easeOutCubic' },
+        cutout: '60%'
+      }
+    })
+  </script>
+</body>
+</html>
