@@ -24,6 +24,9 @@
     .card:before { content:''; position:absolute; inset:0; pointer-events:none; background:linear-gradient(135deg, rgba(255,255,255,.06), transparent 35%); }
     .card:hover { transform: translateY(-3px); box-shadow: 0 16px 34px rgba(2,8,23,.34); border-color: rgba(191,163,106,.35); }
     .nav-link{position:relative}.nav-link:after{content:'';position:absolute;left:0;bottom:-6px;width:0;height:1px;background:#BFA36A;transition:.24s}.nav-link:hover:after{width:100%}
+  
+    .mobile-nav-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+    .mobile-nav-scroll::-webkit-scrollbar { display: none; }
   </style>
 </head>
 <body class="bg-ionNavy text-ionText antialiased">
@@ -40,6 +43,20 @@
         <a href="../ion-home/#contacto" class="nav-link hover:text-white">Contacto</a>
       </nav>
       <a href="../ion-portal/" class="text-xs md:text-sm px-4 py-2 rounded-md bg-ionGold text-slate-900 font-semibold hover:opacity-90 transition whitespace-nowrap">Acceso Clientes</a>
+    </div>
+
+    <!-- Mobile nav links -->
+    <div class="md:hidden border-t border-white/10">
+      <div class="mobile-nav-scroll overflow-x-auto px-4 py-2">
+        <div class="flex gap-2 min-w-max">
+          <a href="../ion-home/" class="px-3 py-1.5 rounded-full border border-white/20 text-xs text-slate-100/95 whitespace-nowrap">Inicio</a>
+          <a href="../ion-home/#mercados" class="px-3 py-1.5 rounded-full border border-white/20 text-xs text-slate-100/95 whitespace-nowrap">Mercados</a>
+          <a href="../ion-productos/" class="px-3 py-1.5 rounded-full border border-white/20 text-xs text-slate-100/95 whitespace-nowrap">Productos</a>
+          <a href="../ion-analisis/" class="px-3 py-1.5 rounded-full border border-white/20 text-xs text-slate-100/95 whitespace-nowrap">Análisis</a>
+          <a href="../ion-home/#contacto" class="px-3 py-1.5 rounded-full border border-white/20 text-xs text-slate-100/95 whitespace-nowrap">Contacto</a>
+          <a href="../ion-portal/" class="px-3 py-1.5 rounded-full border border-ionGold/60 text-ionGold text-xs whitespace-nowrap">Portal Cliente</a>
+        </div>
+      </div>
     </div>
   </header>
 
